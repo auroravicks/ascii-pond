@@ -1,0 +1,12 @@
+# Copy to config.yml. The copy is gitignored.
+occupants:
+  - koi
+  - blossom
+koi:
+  volume: auto
+  size: 75
+  scale: random
+blossom:
+  volume: auto
+  size: 8
+  scale: random

@@ -2,27 +2,96 @@
  * The page around the pond: the clock and the day (or your own words) in
  * character cells, the date under them, the three waters, and the controls.
  *
- *   ?theme=pond|black|light    the water (remembered when you switch)
  *   ?title=One%20Page&tag=is%20all%20you%20need   your own words instead of the clock
  *   ?ui=0                       no controls (for a wallpaper or a recording)
  *   keys: 1 2 3 or T for the water, space to pause
  */
-(() => {
+(async () => {
   "use strict";
-  const { createPond, AsciiMark } = window.AsciiKoi;
+  const { createPond, AsciiMark, PondOccupant } = window.AsciiKoi;
   const root = document.documentElement;
   const q = new URLSearchParams(location.search);
-  const THEMES = ["pond", "black", "light"];
-  const KEY = "ascii-koi-theme";
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const store = {
-    get() { try { return localStorage.getItem(KEY); } catch (e) { return null; } },
-    set(v) { try { localStorage.setItem(KEY, v); } catch (e) { /* private window: not remembered */ } }
+  /* Resolve personal config beside app.js, not beside the current HTML page.
+     This keeps index.html and themes/* on the same extension-local config. */
+  const appUrl = document.currentScript?.src || location.href;
+  /* The extension's personal config is deliberately dependency-free. This
+     small YAML subset supports scalars, top-level lists and one-level maps. */
+  const scalar = value => {
+    const v = value.trim();
+    if (v === "null" || v === "~") return null;
+    if (v === "true" || v === "false") return v === "true";
+    if (/^-?(?:\d+\.?\d*|\.\d+)$/.test(v)) return Number(v);
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) return v.slice(1, -1);
+    if (v.startsWith("[") && v.endsWith("]")) return v.slice(1, -1).split(",").map(scalar).filter(v => v !== "");
+    return v;
   };
-
-  /* the water: the URL, then a page that fixes it (light.html …), then the last one chosen, then the pond */
+  function parseConfig(text) {
+    const out = {}; let parent = null;
+    for (const raw of text.split(/\r?\n/)) {
+      const clean = raw.replace(/\s+#.*$/, "");
+      if (!clean.trim()) continue;
+      const indent = clean.match(/^\s*/)[0].length, line = clean.trim();
+      if (!indent) {
+        const m = line.match(/^([A-Za-z][\w-]*):(?:\s*(.*))?$/);
+        if (!m) continue;
+        parent = m[1]; out[parent] = m[2] ? scalar(m[2]) : undefined;
+      } else if (parent && line.startsWith("- ")) {
+        if (!Array.isArray(out[parent])) out[parent] = [];
+        out[parent].push(scalar(line.slice(2)));
+      } else if (parent) {
+        const m = line.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
+        if (!m) continue;
+        if (!out[parent] || Array.isArray(out[parent]) || typeof out[parent] !== "object") out[parent] = {};
+        out[parent][m[1]] = scalar(m[2]);
+      }
+    }
+    return out;
+  }
+  async function loadConfig() {
+    try {
+      const response = await fetch(new URL("config.yml", appUrl), { cache: "no-store" });
+      return response.ok ? parseConfig(await response.text()) : null;
+    } catch (e) { return null; }
+  }
+  const config = await loadConfig();
+  const THEMES = ["pond", "black", "light"];
+  const THEME_KEY = "ascii-koi-theme", OCCUPANTS_KEY = "ascii-koi-occupants";
+  const knownOccupants = Object.values(PondOccupant);
+  const storage = {
+    get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* private window: not remembered */ } }
+  };
+  const readOccupantPreference = () => {
+    const raw = storage.get(OCCUPANTS_KEY);
+    if (raw === null) return null;
+    try {
+      const value = JSON.parse(raw);
+      return Array.isArray(value) ? [...new Set(value.filter(kind => knownOccupants.includes(kind)))] : null;
+    } catch (e) { return null; }
+  };
+  /* Occupants are a list, not a combination enum. Browser choices override
+     the extension-local config; URLs do not carry persistent preferences. */
+  const localOccupants = config === null ? knownOccupants
+    : Array.isArray(config.occupants) ? config.occupants : [];
+  const browserOccupants = readOccupantPreference();
+  const requestedOccupants = browserOccupants ?? localOccupants;
+  /* Configuration belongs to each selected occupant. Unselected sections are
+     deliberately ignored; "auto", null and absent values keep engine defaults. */
+  const numericOccupantSetting = key => Object.fromEntries(requestedOccupants.flatMap(kind => {
+    const value = config && config[kind] && config[kind][key];
+    return typeof value === "number" && Number.isFinite(value) ? [[kind, value]] : [];
+  }));
+  const scaleSetting = Object.fromEntries(requestedOccupants.flatMap(kind => {
+    const value = config && config[kind] && config[kind].scale;
+    const valid = value === "random" || typeof value === "number" && Number.isFinite(value)
+      || Array.isArray(value) && value.some(v => typeof v === "number" && Number.isFinite(v));
+    return valid ? [[kind, value]] : [];
+  }));
+  const configuredSizes = numericOccupantSetting("size"), configuredVolumes = numericOccupantSetting("volume");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  /* the water: a page may fix it (light.html …), otherwise use the browser choice, then pond */
   const fixed = root.dataset.lock;
-  const first = [q.get("theme"), fixed, store.get(), "pond"].find(v => THEMES.includes(v));
+  const first = [fixed, storage.get(THEME_KEY), "pond"].find(v => THEMES.includes(v));
   root.dataset.theme = first;
 
   const pondCanvas = document.getElementById("pond");
@@ -33,7 +102,6 @@
   const dateLine = document.getElementById("intro-date");
   const ui = document.getElementById("ui");
   if (q.get("ui") === "0") ui.hidden = true;
-  if (location.protocol === "chrome-extension:") document.getElementById("gh")?.remove();
 
   const cssVar = n => getComputedStyle(root).getPropertyValue(n).trim();
   const palette = () => ({
@@ -43,12 +111,77 @@
   });
 
   const pond = createPond({
-    canvas: pondCanvas, palette, reduce,
+    canvas: pondCanvas, palette, reduce, occupants: requestedOccupants,
+    occupantSize: configuredSizes, occupantScale: scaleSetting, occupantVolume: configuredVolumes,
     /* the title's box in pond pixels: the koi fade under it, so the letters can wear their colour */
     dim: () => { const r = box.getBoundingClientRect(); return r.width ? r : null; }
   });
   pond.size(innerWidth, innerHeight);
   window.AsciiKoi.pond = pond;
+
+  /* ── compact browser preferences: intentionally only occupants for now ── */
+  const settings = document.createElement("div");
+  settings.className = "settings";
+  settings.innerHTML = `
+    <button class="settings-toggle" type="button" aria-expanded="false" aria-controls="pond-menu" aria-label="open pond controls"><i></i><i></i><i></i></button>
+    <aside class="settings-menu" id="pond-menu" aria-label="pond controls" hidden>
+      <header><span>pond controls</span></header>
+      <section><p>water</p><div data-water-slot></div></section>
+      <section><p>occupants</p>
+        <div class="occupant-options">${knownOccupants.map(kind => `<label><input type="checkbox" value="${kind}"> <span>${kind}</span></label>`).join("")}</div>
+      </section>
+      <section><p>motion</p><button class="settings-pause" type="button">pause pond</button></section>
+      <section class="settings-help"><p>interactions</p><div data-help-slot></div></section>
+      <footer data-link-slot></footer>
+    </aside>`;
+  ui.append(settings);
+  const settingsToggle = settings.querySelector(".settings-toggle");
+  const settingsMenu = settings.querySelector(".settings-menu");
+  const occupantInputs = [...settings.querySelectorAll('input[type="checkbox"]')];
+  const settingsPause = settings.querySelector(".settings-pause");
+  const themesControl = ui.querySelector(".themes"), hintControl = ui.querySelector(".hint"), githubLink = document.getElementById("gh");
+  settings.querySelector("[data-water-slot]").append(themesControl);
+  settings.querySelector("[data-help-slot]").append(hintControl);
+  if (githubLink) settings.querySelector("[data-link-slot]").append(githubLink);
+  const setMenuOpen = open => {
+    settingsMenu.hidden = !open;
+    settings.classList.toggle("open", open);
+    settingsToggle.setAttribute("aria-expanded", String(open));
+    settingsToggle.setAttribute("aria-label", open ? "close pond controls" : "open pond controls");
+  };
+  const markOccupants = list => {
+    const selected = new Set(list);
+    for (const input of occupantInputs) input.checked = selected.has(input.value);
+  };
+  const applyOccupants = list => {
+    const selected = new Set(list), active = new Set(pond.occupants);
+    for (const kind of active) if (!selected.has(kind)) pond.removeOccupant(kind);
+    for (const kind of selected) if (!active.has(kind)) pond.addOccupant(kind);
+  };
+  markOccupants(requestedOccupants);
+  settingsToggle.addEventListener("click", () => setMenuOpen(settingsMenu.hidden));
+  for (const input of occupantInputs) input.addEventListener("change", () => {
+    const selected = occupantInputs.filter(item => item.checked).map(item => item.value);
+    storage.set(OCCUPANTS_KEY, JSON.stringify(selected));
+    applyOccupants(selected);
+  });
+  const markPaused = paused => {
+    settingsPause.textContent = paused ? "resume pond" : "pause pond";
+    document.getElementById("pause-state").textContent = paused ? "paused" : "";
+  };
+  settingsPause.addEventListener("click", () => markPaused(pond.pause()));
+  addEventListener("pointerdown", event => {
+    if (!settingsMenu.hidden && !settings.contains(event.target)) {
+      setMenuOpen(false);
+      event.stopImmediatePropagation();
+    }
+  });
+  addEventListener("keydown", event => {
+    if (event.key === "Escape" && !settingsMenu.hidden) {
+      setMenuOpen(false);
+      settingsToggle.focus();
+    }
+  });
 
   /* ── the words: the time as the title, the day under it, then the date ── */
   const own = q.get("title");
@@ -136,7 +269,7 @@
       snap.classList.add("wipe");
     }
     root.dataset.theme = name;
-    if (!fixed) store.set(name);
+    if (!fixed) storage.set(THEME_KEY, name);
     pond.colors();
     mark();
   }
@@ -176,7 +309,7 @@
     const n = "123".indexOf(e.key);
     if (n >= 0) setTheme(THEMES[n]);
     else if (e.key === "t" || e.key === "T") setTheme(THEMES[(THEMES.indexOf(root.dataset.theme) + 1) % 3]);
-    else if (e.key === " ") { e.preventDefault(); const p = pond.pause(); document.getElementById("pause-state").textContent = p ? "paused" : ""; }
+    else if (e.key === " ") { e.preventDefault(); markPaused(pond.pause()); }
   });
 
   /* the controls fade out while you leave the mouse alone */

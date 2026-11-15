@@ -119,6 +119,16 @@
    */
   const VARIETY = ["kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "tancho", "sanke", "kohaku", "sanke", "kohaku"];
   const COLOURS = ["course", "vermilion", "gold", "sakura"];
+  /* Public occupant names. Hosts pass createPond({ occupants: [...] }). */
+  const PondOccupant = Object.freeze({ KOI: "koi", BLOSSOM: "blossom" });
+  const PondScale = Object.freeze({ RANDOM: "random" });
+  const PondSizeBounds = Object.freeze({ min: 1, max: 100 });
+  const PondVolumeBounds = Object.freeze({ min: 0.25, max: 3 });
+  /* One discoverable interaction table for hosts and future occupant adapters. */
+  const PondInteractions = Object.freeze({
+    paw: Object.freeze({ koi: "flee-and-return", blossom: "scatter" }),
+    food: Object.freeze({ koi: "seek-and-eat" })
+  });
   /* the most one joint of a koi turns from the one in front of it, in radians */
   const BEND = 0.42;
   /* More koi in a bigger pond, by width or by area, up to `most` (opts.most; fourteen unless a host asks for more). */
@@ -154,6 +164,8 @@
   const LEG = 8.4, HAND = 10, TOES = [-1.12, -0.38, 0.38, 1.12];
   /* Fish food: how long a pellet floats before it sinks out of sight, and how long it takes to sink. */
   const FLOAT = 16, SINKING = 2.5;
+  /* Cherry blossoms rest on the surface for a while, then waterlog and sink slowly out of sight. */
+  const BLOSSOM_SINKING = 7;
   const STEP = 1 / 60;
 
   /*
@@ -164,15 +176,73 @@
   function createPond(opts) {
     const canvas = opts.canvas, ctx = canvas.getContext("2d");
     const reduce = !!opts.reduce;
-    const MOST = Math.max(3, Math.round(opts.most || VARIETY.length));
+    const requestedMost = Number(opts.most);
+    const MOST = Math.max(3, Number.isFinite(requestedMost) ? Math.round(requestedMost) : VARIETY.length);
+    /* Size establishes each kind's absolute order of magnitude. Scale is a
+       separate, shared 1–5 relative level; "random" chooses a seeded level. */
+    const SCALE_MIN = 1, SCALE_MAX = 5, occupantSize = opts.occupantSize || {}, occupantScale = opts.occupantScale || {};
+    const defaultSize = Object.freeze({ [PondOccupant.KOI]: 75, [PondOccupant.BLOSSOM]: 8 });
+    /* Preserve the original koi's visual scale: its former 128–180px range
+       has a 154px midpoint, represented by logical size 75 at scale level 3. */
+    const KOI_PHYSICAL_UNIT = 154 / 75;
+    /* Keep the five levels distinct without dropping ASCII occupants below
+       the character-grid resolution needed for a readable silhouette. */
+    const relativeScale = Object.freeze([0.85, 0.925, 1, 1.075, 1.15]);
+    function valueFor(config, kind) {
+      return typeof config === "number" || typeof config === "string" || Array.isArray(config) ? config
+        : config && config[kind] != null ? config[kind]
+        : config && config.default != null ? config.default
+        : null;
+    }
+    function absoluteSizeFor(kind) {
+      const value = valueFor(occupantSize, kind), fallback = defaultSize[kind] || 1;
+      return clamp(typeof value === "number" && Number.isFinite(value) ? value : fallback, PondSizeBounds.min, PondSizeBounds.max);
+    }
+    function scaleSpec(kind) {
+      const value = valueFor(occupantScale, kind);
+      const all = [1, 2, 3, 4, 5];
+      if (value == null || value === PondScale.RANDOM) return Object.freeze({ values: Object.freeze(all), random: true });
+      const supplied = Array.isArray(value) ? value : [value];
+      const values = [...new Set(supplied.filter(v => Number.isFinite(+v)).map(v => Math.round(clamp(+v, SCALE_MIN, SCALE_MAX))))];
+      return Object.freeze({ values: Object.freeze(values.length ? values : all), random: values.length !== 1 });
+    }
+    const scaleLevels = Object.freeze({
+      [PondOccupant.KOI]: scaleSpec(PondOccupant.KOI),
+      [PondOccupant.BLOSSOM]: scaleSpec(PondOccupant.BLOSSOM)
+    });
+    function sizingFor(kind, seed) {
+      const spec = scaleLevels[kind] || scaleSpec(kind);
+      const level = spec.values[Math.floor(h2(seed, 811) * spec.values.length)];
+      const factor = relativeScale[level - SCALE_MIN];
+      const size = clamp(absoluteSizeFor(kind) * factor, PondSizeBounds.min, PondSizeBounds.max);
+      const physicalSize = kind === PondOccupant.KOI ? size * KOI_PHYSICAL_UNIT : size;
+      return { level, factor, size, physicalSize };
+    }
+    const requested = opts.occupants == null ? Object.values(PondOccupant) : (Array.isArray(opts.occupants) ? opts.occupants : [opts.occupants]);
+    const occupants = new Set(requested.filter(v => Object.values(PondOccupant).includes(v)));
+    /* A mixed pond shares its visual population budget between occupant types.
+       Numeric/per-kind overrides bypass that automatic balance as multipliers. */
+    const occupantVolume = opts.occupantVolume;
+    function volumeFor(kind) {
+      const configured = typeof occupantVolume === "number" && Number.isFinite(occupantVolume) ? occupantVolume
+        : occupantVolume && Number.isFinite(+occupantVolume[kind]) ? +occupantVolume[kind]
+        : occupantVolume && Number.isFinite(+occupantVolume.default) ? +occupantVolume.default
+        : null;
+      return clamp(
+        configured == null ? 1 / Math.sqrt(Math.max(1, occupants.size)) : configured,
+        PondVolumeBounds.min,
+        PondVolumeBounds.max
+      );
+    }
     const N = 10, RAMP = " .:-=+*#%@", SUB = [0.25, 0.25, 0.75, 0.25, 0.25, 0.75, 0.75, 0.75];
     let vw = 0, vh = 0, dpr = 1, cw = 10, ch = 13, cols = 0, rows = 0, K = 1.85;
-    let t = 0, simT = 0, paused = false;
+    let t = 0, simT = 0, paused = false, initialized = false;
     let P = null;
     let tileRGB, tileA, glyphRGB, glyphA, glyphCode, shade, wake, wakeTmp, tintRGB, tintA;
     const touched = [];
     let fish = [];
-    const paws = [], rings = [], drops = [], food = [], bubbles = [];
+    const paws = [], rings = [], drops = [], food = [], bubbles = [], blossoms = [];
+    let blossomSerial = 0, nextBlossom = 0;
     /* events for a film: { at, fn } run when the simulation passes them */
     const plan = [];
     let planAt = 0;
@@ -180,15 +250,19 @@
     const caus = (x, y) => 1 - Math.min(1, Math.abs(noise(x / 46 + t * 0.21, y / 46 - t * 0.13, 7) - noise(x / 39 - t * 0.17, y / 52 + t * 0.19, 11)) * 5.5);
 
     function makeFish() {
-      fish = Array.from({ length: MOST }, (_, i) => varietyOf(i)).map((variety, i) => {
+      if (!occupants.has(PondOccupant.KOI)) { fish = []; return; }
+      /* Keep enough deterministic fish in reserve for explicit volume values
+         above one and for later runtime occupant changes. */
+      const capacity = Math.max(MOST, Math.ceil(MOST * volumeFor(PondOccupant.KOI)));
+      fish = Array.from({ length: capacity }, (_, i) => varietyOf(i)).map((variety, i) => {
         const r = seeded("koi" + i);
         const right = i % 2 === 0, a = right ? (r() - 0.5) * 0.3 : Math.PI + (r() - 0.5) * 0.3;
-        const L0 = 128 + r() * 52, seg = L0 / (N - 1);
+        const seed = i * 97 + 13, sizing = sizingFor(PondOccupant.KOI, seed);
+        const L0 = sizing.physicalSize, seg = L0 / (N - 1);
         const nodes = new Float32Array(N * 2);
         for (let j = 0; j < N; j++) { nodes[j * 2] = -Math.cos(a) * seg * j; nodes[j * 2 + 1] = -Math.sin(a) * seg * j; }
-        const seed = i * 97 + 13;
         return {
-          variety, colour: COLOURS[i % 4], seen: 1, seed, marks: markings(variety, seed), a, nodes, seg, L0,
+          variety, colour: COLOURS[i % 4], seen: 1, seed, scaleLevel: sizing.level, size: sizing.size, physicalSize: sizing.physicalSize, marks: markings(variety, seed), a, nodes, seg, L0,
           cruise: 24 + r() * 12, nx: (i * 0.38 + 0.15) % 1, ny: 0.22 + r() * 0.56, depth: 0.35 + r() * 0.65, phase: r() * 6.28,
           beat: 0.5, turn: 0, flee: 0, fleeA: 0, seekX: 0, seekY: 0, seekFrom: 0, seekUntil: 0,
           /* feeding: how keen, how far it notices food, when it may eat again, how close to the surface */
@@ -209,7 +283,16 @@
       tintRGB = new Uint32Array(n); tintA = new Float32Array(n);
       touched.length = 0;
     }
-    const count = () => Math.round(room(vw, vh, MOST));
+    const count = () => {
+      if (!occupants.has(PondOccupant.KOI)) return 0;
+      const cap = Math.max(3, Math.round(MOST * volumeFor(PondOccupant.KOI)));
+      return Math.min(cap, Math.round(room(vw, vh, cap)));
+    };
+    function settleKoiVisibility() {
+      if (!reduce && !paused) return;
+      const n = count();
+      fish.forEach((f, i) => { f.seen = i < n ? 1 : 0; });
+    }
     const headX = f => f.nx * vw, headY = f => f.ny * vh;
 
     function stamp(x, y, rad, amt) {
@@ -428,7 +511,7 @@
             }
             if (cover >= 0.6) {
               const si = (r + sdr) * cols + (c + sdc);
-              if (r + sdr < rows && c + sdc < cols) shade[si] = Math.max(shade[si], (P.dark ? 0.55 : 0.22) * (0.5 + 0.5 * depth) * dim * f.seen);
+              if (r + sdr < rows && c + sdc < cols) shade[si] = Math.max(shade[si], (P.dark ? 0.55 : 0.32) * (0.5 + 0.5 * depth) * dim * f.seen);
             }
           }
           if (!tileA[i] && !glyphA[i]) touched.push(i);
@@ -479,6 +562,14 @@
         /* the two curious ones come to look from either side, not at the same spot */
         if (i < 2) { const o = (i ? 1 : -1) * 34 * p.k; f.seekX = x - s.vx * o; f.seekY = y - s.vy * o; f.seekFrom = t + 1.3 + i * 0.5; f.seekUntil = f.seekFrom + 3.5; }
       });
+      /* Surface petals skate away from the paw; sunken ones only sway a little. */
+      for (const b of blossoms) {
+        const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1;
+        if (d < reach * 0.72) {
+          const push = (1 - d / (reach * 0.72)) * (b.sinking ? 24 : 80) * p.k;
+          b.vx += dx / d * push; b.vy += dy / d * push; b.spin += s.side * push * 0.018;
+        }
+      }
     }
     /* The tugs stir the water in front of the curled toes. */
     function stir(p, dt) {
@@ -640,7 +731,7 @@
     /* ── fish food ── */
     /* A handful tossed at (x, y): ten or so pellets spray out from the hand and land around it. */
     function feed(x, y) {
-      if (!water(x, y)) return false;
+      if (!occupants.has(PondOccupant.KOI) || !water(x, y)) return false;
       const k = K, seed = (Math.round(t * 1000) * 7919) ^ (Math.round(x) * 31 + Math.round(y) * 17);
       const n = 10 + Math.floor(h2(seed, 1) * 5);
       for (let j = 0; j < n; j++) {
@@ -704,6 +795,85 @@
       ctx.globalAlpha = 1;
     }
 
+    /* ── cherry blossoms ── */
+    function addBlossom(initial = false) {
+      const seed = blossomSerial++ * 149 + 37;
+      const sizing = sizingFor(PondOccupant.BLOSSOM, seed);
+      /* New petals land across the water instead of continually entering at
+         one edge, which otherwise makes the steady-state population hug it. */
+      const x = h2(seed, 2) * vw, y = h2(seed, 3) * vh;
+      const age = initial ? h2(seed, 4) * 22 : 0;
+      blossoms.push({
+        seed, x, y, vx: (h2(seed, 5) - 0.5) * 12, vy: (h2(seed, 7) - 0.5) * 7,
+        angle: h2(seed, 8) * Math.PI * 2, spin: (h2(seed, 9) - 0.5) * 0.7,
+        scaleLevel: sizing.level, size: sizing.size, physicalSize: sizing.physicalSize,
+        land: t - age, soak: 15 + h2(seed, 10) * 17, sinking: false, depth: 0
+      });
+    }
+    function stepBlossoms(dt) {
+      if (!occupants.has(PondOccupant.BLOSSOM)) return;
+      if (t >= nextBlossom) {
+        addBlossom();
+        nextBlossom = t + (0.45 + h2(blossomSerial, 71) * 0.75) / volumeFor(PondOccupant.BLOSSOM);
+      }
+      for (const b of blossoms) {
+        const age = t - b.land;
+        if (!b.sinking && age >= b.soak) { b.sinking = true; rings.push({ x: b.x, y: b.y, born: t, k: K * 0.32, small: true, tiny: true }); }
+        b.depth = b.sinking ? clamp((age - b.soak) / BLOSSOM_SINKING, 0, 1) : 0;
+        /* Two broad currents keep the motion organic while remaining deterministic. */
+        const margin = Math.min(56, Math.min(vw, vh) * 0.1);
+        const edgeX = b.x < margin ? (margin - b.x) * 0.09 : b.x > vw - margin ? (vw - margin - b.x) * 0.09 : 0;
+        const edgeY = !b.sinking && b.y < margin ? (margin - b.y) * 0.09
+          : !b.sinking && b.y > vh - margin ? (vh - margin - b.y) * 0.09 : 0;
+        const currentX = Math.sin(t * 0.19 + b.seed) * 5 + Math.sin(b.y / 120 + t * 0.11) * 3 + edgeX;
+        const currentY = Math.cos(t * 0.16 + b.seed * 0.7) * 3 + edgeY;
+        b.vx = lerp(b.vx, currentX, Math.min(1, dt * (b.sinking ? 0.35 : 0.7)));
+        b.vy = lerp(b.vy, currentY + (b.sinking ? 7 : 0), Math.min(1, dt * 0.6));
+        b.x += b.vx * dt; b.y += b.vy * dt; b.angle += (b.spin + Math.sin(t * 0.4 + b.seed) * 0.16) * dt;
+        b.vx *= Math.exp(-dt * 0.18); b.vy *= Math.exp(-dt * 0.12); b.spin *= Math.exp(-dt * 0.1);
+        if (b.x < -36) b.x = vw + 18; else if (b.x > vw + 36) b.x = -18;
+        if (!b.sinking && b.y < -36) b.y = vh + 18;
+        else if (!b.sinking && b.y > vh + 36) b.y = -18;
+      }
+      for (let j = blossoms.length - 1; j >= 0; j--) {
+        const b = blossoms[j];
+        if (b.depth >= 1 || (b.sinking && b.y > vh + 28)) blossoms.splice(j, 1);
+      }
+      const limit = Math.max(10, Math.round(64 * volumeFor(PondOccupant.BLOSSOM)));
+      while (blossoms.length > limit) blossoms.shift();
+    }
+    function drawBlossoms(sunken) {
+      if (!occupants.has(PondOccupant.BLOSSOM) || !blossoms.length) return;
+      for (const b of blossoms) {
+        if (b.sinking !== sunken) continue;
+        const fade = 1 - b.depth, depthScale = 1 - b.depth * 0.28;
+        if (fade <= 0) continue;
+        /* Anime commonly simplifies a falling sakura petal into a slim,
+           wind-bent teardrop. Keep one pointed attachment end and an
+           asymmetric rounded blade; paired lobes read as a heart at this size. */
+        const tone = h2(b.seed, 13), petal = tone < 0.5
+          ? mixC(P.blossomDark, P.blossom, tone * 2)
+          : mixC(P.blossom, P.blossomPale, (tone - 0.5) * 2);
+        const w = b.physicalSize * (0.62 + h2(b.seed, 14) * 0.25), h = b.physicalSize * (0.72 + h2(b.seed, 15) * 0.24);
+        /* A slow width change makes the petal turn edge-on as it tumbles. */
+        const face = 0.3 + 0.7 * Math.abs(Math.sin(t * (0.42 + h2(b.seed, 16) * 0.35) + b.seed));
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.angle); ctx.scale(depthScale * face, depthScale);
+        ctx.globalAlpha = fade * (P.dark ? 0.96 : 0.9); ctx.fillStyle = css(pack(petal));
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.52);
+        ctx.bezierCurveTo(-w * 0.18, h * 0.34, -w * 0.5, h * 0.06, -w * 0.44, -h * 0.24);
+        ctx.bezierCurveTo(-w * 0.38, -h * 0.48, -w * 0.08, -h * 0.6, w * 0.08, -h * 0.5);
+        ctx.bezierCurveTo(w * 0.34, -h * 0.36, w * 0.48, -h * 0.08, w * 0.38, h * 0.16);
+        ctx.bezierCurveTo(w * 0.3, h * 0.34, w * 0.12, h * 0.45, 0, h * 0.52);
+        ctx.fill();
+        /* A short translucent vein adds form without outlining every petal. */
+        ctx.globalAlpha = fade * 0.18; ctx.strokeStyle = css(pack(P.blossomDark)); ctx.lineWidth = Math.max(0.65, cw * 0.07);
+        ctx.beginPath(); ctx.moveTo(0, h * 0.43); ctx.quadraticCurveTo(-w * 0.08, h * 0.06, w * 0.03, -h * 0.27); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     /* Moves the paws, drops, rings and food on by one step. */
     function stepPaws(dt) {
       for (const p of paws) {
@@ -731,6 +901,7 @@
       step(dt);
       stepPaws(dt);
       stepFood(dt);
+      stepBlossoms(dt);
     }
 
     /* ── colours ── */
@@ -746,9 +917,17 @@
         /* fins read by value, as grey sharks do: lighter than dark water, darker than light water */
         fin: dark ? mixC(light, water, 0.25) : mixC(water, black, 0.34),
         dot: dark ? light : ink,
-        food: dark ? [206, 142, 74] : [150, 92, 40]
+        food: dark ? [206, 142, 74] : [150, 92, 40],
+        blossomDark: dark ? [210, 72, 116] : [176, 48, 94],
+        blossom: dark ? [244, 142, 166] : [218, 105, 135],
+        blossomPale: dark ? [255, 238, 241] : [255, 244, 244]
       };
-      const scheme = (red, white, black) => ({ red, white, black, fin: dark ? mixC(white, water, 0.25) : P.fin });
+      const scheme = (red, white, black) => {
+        /* Pale skin needs a real value step from light water; otherwise only
+           the red markings remain and the koi reads as disconnected pieces. */
+        const bodyWhite = dark ? white : mixC(white, black, 0.12);
+        return { red, white: bodyWhite, black, fin: dark ? mixC(white, water, 0.25) : mixC(bodyWhite, black, 0.18) };
+      };
       P.koi = {
         course: scheme(P.red, P.white, P.black),
         vermilion: scheme([214, 58, 36], [246, 242, 234], [24, 22, 20]),
@@ -775,6 +954,8 @@
       ctx.globalAlpha = 1;
       ctx.fillStyle = css(pack(P.water));
       ctx.fillRect(0, 0, vw, vh);
+      /* Submerged petals sit below fish, shadows, wakes and surface light. */
+      drawBlossoms(true);
       ctx.font = `600 ${Math.round(ch * 0.74)}px ${MONO}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -820,6 +1001,7 @@
         ctx.globalAlpha = glyphA[i]; ctx.fillText(String.fromCharCode(glyphCode[i]), (i % cols) * cw + cw / 2, ((i / cols) | 0) * ch + ch / 2);
       }
       drawFood();
+      drawBlossoms(false);
       for (const p of paws) drawPaw(p);
       ctx.globalAlpha = 1;
     }
@@ -827,18 +1009,24 @@
     /* From scratch: the shoal, then a few seconds of swimming so it starts in natural curves. */
     function reset() {
       makeFish();
-      paws.length = rings.length = drops.length = food.length = bubbles.length = 0;
+      paws.length = rings.length = drops.length = food.length = bubbles.length = blossoms.length = 0;
+      blossomSerial = 0; nextBlossom = 1.2;
       wake.fill(0); wakeTmp.fill(0);
       t = 0;
       const n = count();
       fish.forEach((f, i) => { f.seen = i < n ? 1 : 0; });
+      if (occupants.has(PondOccupant.BLOSSOM)) {
+        const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.BLOSSOM)));
+        for (let j = 0; j < initial; j++) addBlossom(true);
+      }
       for (let j = 0; j < 90; j++) { t += 1 / 30; step(1 / 30); }
       simT = 0; planAt = 0;
+      initialized = true;
     }
 
     /* Film mode: the pond at film time T, stepped forward in fixed steps; the same T always gives the same frame. draw = false only steps it. */
     function seek(T, draw = true) {
-      if (!fish.length || T < simT - 1e-6) reset();
+      if (!initialized || T < simT - 1e-6) reset();
       while (simT + STEP <= T + 1e-6) {
         simT += STEP;
         while (planAt < plan.length && plan[planAt].at <= simT + 1e-6) plan[planAt++].fn();
@@ -890,6 +1078,42 @@
       /* for tests: the koi and the food */
       get fish() { return fish; },
       get food() { return food; },
+      get blossoms() { return blossoms; },
+      get occupants() { return [...occupants]; },
+      get scaleLevels() { return scaleLevels; },
+      get volumes() { return Object.fromEntries([...occupants].map(kind => [kind, volumeFor(kind)])); },
+      setOccupants(list) {
+        const next = Array.isArray(list) ? list : [list];
+        occupants.clear();
+        for (const kind of next) if (Object.values(PondOccupant).includes(kind)) occupants.add(kind);
+        /* Before size(), typed buffers do not exist yet; start() will reset. */
+        if (wake) reset(); else makeFish();
+        dirty = true;
+        return [...occupants];
+      },
+      addOccupant(kind) {
+        if (!Object.values(PondOccupant).includes(kind) || occupants.has(kind)) return false;
+        occupants.add(kind);
+        if (kind === PondOccupant.KOI) {
+          makeFish();
+        }
+        if (kind === PondOccupant.BLOSSOM && wake) {
+          const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.BLOSSOM)));
+          for (let j = 0; j < initial; j++) addBlossom(true);
+        }
+        settleKoiVisibility();
+        dirty = true; return true;
+      },
+      removeOccupant(kind) {
+        if (!occupants.delete(kind)) return false;
+        if (kind === PondOccupant.KOI) {
+          fish = [];
+          food.length = bubbles.length = 0;
+        }
+        if (kind === PondOccupant.BLOSSOM) blossoms.length = 0;
+        settleKoiVisibility();
+        dirty = true; return true;
+      },
       render() { render(); },
       /* The colour of the koi under canvas point (x, y), as [r, g, b, weight], or null: the title takes it on. */
       tint(x, y) {
@@ -1052,5 +1276,5 @@
     return { build, draw, get glow() { return glow; }, get size() { return { w: cols * cw, h: rows * ch }; } };
   }
 
-  global.AsciiKoi = { createPond, AsciiMark, seeded };
+  global.AsciiKoi = { createPond, AsciiMark, seeded, PondOccupant, PondScale, PondSizeBounds, PondVolumeBounds, PondInteractions };
 })(typeof window !== "undefined" ? window : globalThis);
