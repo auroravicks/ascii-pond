@@ -14,7 +14,7 @@ No build step is required. Keep the files together; `manifest.json` points the b
 
 `config.yml` is loaded from beside `app.js` by the installed extension, so the main page and every `themes/*` page share the same local configuration. Reload the extension after editing it. A page opened directly with a `file://` URL cannot read neighboring files under normal browser security, so direct-file previews use engine defaults.
 
-The three-bar menu stores its occupant selection in browser storage and overrides `config.yml`. This reset is intentionally developer-only: remove the `ascii-koi-occupants` key from the extension's local storage to return control to `config.yml`. URL parameters do not override water or occupant preferences.
+The three-bar menu stores its occupant selection in browser storage and overrides `config.yml`. This reset is intentionally developer-only: remove the `ascii-pond-occupants` key from the extension's local storage to return control to `config.yml`. URL parameters do not override water or occupant preferences.
 
 ## Occupant combinations
 
@@ -88,7 +88,7 @@ leaf:
   scale: random
 ```
 
-An empty file or an empty `occupants` list creates water without occupants. A missing or unreadable `config.yml` uses the built-in default occupants. Unknown names are ignored. The canonical names are exported as `AsciiKoi.PondOccupant`.
+An empty file or an empty `occupants` list creates water without occupants. A missing or unreadable `config.yml` uses the built-in default occupants. Unknown names are ignored. The canonical names are exported as `AsciiPond.PondOccupant`.
 
 The side panel exposes the same occupant names. A saved browser selection takes precedence over this list, including after `config.yml` changes.
 
@@ -145,7 +145,7 @@ leaf:
   volume: 0.8
 ```
 
-Volume multipliers for every occupant are globally clamped to `0.25–3`. The engine exports this shared contract as `AsciiKoi.PondVolumeBounds`. Volume affects population, not physical size.
+Volume multipliers for every occupant are globally clamped to `0.25–3`. The engine exports this shared contract as `AsciiPond.PondVolumeBounds`. Volume affects population, not physical size.
 
 ## Engine API
 

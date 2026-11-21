@@ -20,7 +20,7 @@ For the complete new-tab experience:
 
 Reload the unpacked extension after changing source files. You can also open `index.html` directly for a quick preview, but a `file://` page normally cannot load the adjacent `config.yml`.
 
-To test local configuration, copy `config.example.yml` to the gitignored `config.yml`. Browser occupant choices override that file; remove the `ascii-koi-occupants` local-storage key to return control to local configuration. See [extension variants](docs/extension-variants.md).
+To test local configuration, copy `config.example.yml` to the gitignored `config.yml`. Browser occupant choices override that file; remove the `ascii-pond-occupants` local-storage key to return control to local configuration. See [extension variants](docs/extension-variants.md).
 
 ## Repository structure
 
@@ -47,14 +47,14 @@ To test local configuration, copy `config.example.yml` to the gitignored `config
 - Update the side panel, `config.example.yml`, and both occupant documents when adding or renaming an occupant.
 - Keep the README focused on installation and user-facing behavior; put engine and configuration detail under `docs/`.
 
-## Compatibility
+## Public identity
 
-The visible product name is **ASCII Pond**, but several inherited identifiers remain stable for compatibility:
+Use the fork's own identifiers throughout integrations and browser preferences:
 
-- `window.AsciiKoi` and its exported engine API
-- `ascii-koi-theme` and `ascii-koi-occupants` browser-storage keys
+- `window.AsciiPond` and its exported engine API
+- `ascii-pond-theme` and `ascii-pond-occupants` browser-storage keys
 
-Do not rename these identifiers without an explicit migration plan and a clearly marked breaking release.
+Changes to these identifiers require an explicit migration plan and a clearly marked breaking release.
 
 ## Validate changes
 

@@ -8,7 +8,7 @@
  */
 (async () => {
   "use strict";
-  const { createPond, AsciiMark, PondOccupant } = window.AsciiKoi;
+  const { createPond, AsciiMark, PondOccupant } = window.AsciiPond;
   const root = document.documentElement;
   const q = new URLSearchParams(location.search);
   /* Resolve personal config beside app.js, not beside the current HTML page.
@@ -55,7 +55,7 @@
   }
   const config = await loadConfig();
   const THEMES = ["pond", "black", "light"];
-  const THEME_KEY = "ascii-koi-theme", OCCUPANTS_KEY = "ascii-koi-occupants";
+  const THEME_KEY = "ascii-pond-theme", OCCUPANTS_KEY = "ascii-pond-occupants";
   const knownOccupants = Object.values(PondOccupant);
   const storage = {
     get(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
@@ -119,7 +119,7 @@
     dim: () => { const r = box.getBoundingClientRect(); return r.width ? r : null; }
   });
   pond.size(innerWidth, innerHeight);
-  window.AsciiKoi.pond = pond;
+  window.AsciiPond.pond = pond;
 
   /* ── compact browser preferences: intentionally only occupants for now ── */
   const settings = document.createElement("div");

@@ -6,7 +6,7 @@ const b = await launch({ width: 1440, height: 900, dpr: 2, args: gpu ? ["--enabl
 await b.goto(url);
 await new Promise(r => setTimeout(r, 1500));
 const out = await b.evaluate(`(() => {
-  const p = AsciiKoi.pond, root = document.documentElement, res = {};
+  const p = AsciiPond.pond, root = document.documentElement, res = {};
   for (const th of ["pond", "black", "light"]) {
     root.dataset.theme = th; p.colors();
     const ts = [];

@@ -1542,5 +1542,5 @@
     return { build, draw, get glow() { return glow; }, get size() { return { w: cols * cw, h: rows * ch }; } };
   }
 
-  global.AsciiKoi = { createPond, AsciiMark, seeded, PondOccupant, PondScale, PondSizeBounds, PondVolumeBounds, PondInteractions };
+  global.AsciiPond = { createPond, AsciiMark, seeded, PondOccupant, PondScale, PondSizeBounds, PondVolumeBounds, PondInteractions };
 })(typeof window !== "undefined" ? window : globalThis);
