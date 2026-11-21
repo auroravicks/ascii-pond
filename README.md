@@ -2,7 +2,7 @@
 
 **A configurable ASCII pond for your new tab.** Koi, deep-lurking arapaima, drifting cherry petals, and leaves share a pond drawn entirely in text characters. Open the side panel to choose its occupants, poke the water with a cat paw, or feed the koi.
 
-This repository is a fork of [pursurer/ascii-koi](https://github.com/pursurer/ascii-koi). ASCII Pond keeps the original pond, clock, koi, cat-paw interactions, and deterministic canvas engine while adding multiple occupant types, local YAML configuration, browser-stored occupant controls, shared sizing rules, and premapped interactions.
+**ASCII Pond is an independent, community-maintained fork of [ASCII Koi](https://github.com/pursurer/ascii-koi) by [pursurer](https://github.com/pursurer).** The original project provides the ASCII koi pond, rendering engine, animations, clock, themes, and interactions. This fork extends that foundation with arapaima, cherry petals, leaves, mixed-pond configuration, additional controls, and packaged releases. It is not affiliated with or officially maintained by the original author.
 
 <p align="center">
   <a href="#install"><b>Install as your new tab</b></a> &nbsp;·&nbsp;
@@ -86,7 +86,8 @@ The related upstream projects retain the original [`ascii-koi`](https://github.c
 
 ## Credits
 
-- Original project and core design: [pursurer/ascii-koi](https://github.com/pursurer/ascii-koi). This fork preserves its MIT license and extends the engine from that foundation.
+- **Original project and core design:** [ASCII Koi](https://github.com/pursurer/ascii-koi) by [pursurer](https://github.com/pursurer). The original author created the pond, rendering engine, koi, animations, clock, themes, cat paw, and feeding interactions.
+- **Fork additions:** ASCII Pond adds configurable occupants, arapaima, cherry petals, leaves, browser controls, shared sizing and population rules, and local configuration. It is independently maintained and is not an official ASCII Koi release.
 - Technique informed by [stackedlol/ascii-sharks](https://github.com/stackedlol/ascii-sharks) (MIT) and [daoho.dev](https://daoho.dev); all code here is written for this project.
 - Fonts: [Noto Serif Display](https://fonts.google.com/noto/specimen/Noto+Serif+Display) and [Geist Mono](https://github.com/vercel/geist-font), both under the SIL Open Font License (see `fonts/`).
 
@@ -96,4 +97,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, architecture conventions, comp
 
 ## License
 
-MIT. See [LICENSE](LICENSE) for the inherited license text.
+MIT. The distribution retains pursurer's original copyright and permission notice in [LICENSE](LICENSE).

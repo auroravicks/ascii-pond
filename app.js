@@ -141,10 +141,10 @@
   const settingsMenu = settings.querySelector(".settings-menu");
   const occupantInputs = [...settings.querySelectorAll('input[type="checkbox"]')];
   const settingsPause = settings.querySelector(".settings-pause");
-  const themesControl = ui.querySelector(".themes"), hintControl = ui.querySelector(".hint"), githubLink = document.getElementById("gh");
+  const themesControl = ui.querySelector(".themes"), hintControl = ui.querySelector(".hint"), projectLinks = document.getElementById("project-links");
   settings.querySelector("[data-water-slot]").append(themesControl);
   settings.querySelector("[data-help-slot]").append(hintControl);
-  if (githubLink) settings.querySelector("[data-link-slot]").append(githubLink);
+  if (projectLinks) settings.querySelector("[data-link-slot]").append(projectLinks);
   const setMenuOpen = open => {
     settingsMenu.hidden = !open;
     settings.classList.toggle("open", open);
