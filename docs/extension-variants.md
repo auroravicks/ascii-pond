@@ -33,10 +33,21 @@ Cherry petals only:
 
 ```yaml
 occupants:
-  - blossom
-blossom:
+  - cherry-blossom
+cherry-blossom:
   volume: auto
   size: 8
+  scale: random
+```
+
+Leaves only:
+
+```yaml
+occupants:
+  - leaf
+leaf:
+  volume: auto
+  size: 12
   scale: random
 ```
 
@@ -45,14 +56,19 @@ Mixed pond:
 ```yaml
 occupants:
   - koi
-  - blossom
+  - cherry-blossom
+  - leaf
 koi:
   volume: auto
   size: 75
   scale: random
-blossom:
+cherry-blossom:
   volume: auto
   size: 8
+  scale: random
+leaf:
+  volume: auto
+  size: 12
   scale: random
 ```
 
@@ -60,7 +76,7 @@ An empty file or an empty `occupants` list creates water without occupants. A mi
 
 ## Absolute size and relative scale
 
-`size` establishes an occupant type's absolute order of magnitude on one shared `1–100` domain. Koi default to `75`; petals default to `8`. Override it with any number—the engine clamps both the base and final scaled result to that global range:
+`size` establishes an occupant type's absolute order of magnitude on one shared `1–100` domain. Koi default to `75`, leaves to `12`, and cherry petals to `8`. Override it with any number—the engine clamps both the base and final scaled result to that global range:
 
 ```yaml
 koi:
@@ -74,9 +90,12 @@ koi:
 koi:
   size: 75
   scale: 4
-blossom:
+cherry-blossom:
   size: 8
   scale: [1, 3, 5]
+leaf:
+  size: 12
+  scale: random
 ```
 
 Absolute and final scaled sizes are globally clamped to `1–100`. Numeric scale levels and list entries are rounded and clamped to `1–5`; duplicates are removed. Different default absolute sizes preserve each occupant's order of magnitude.
@@ -97,8 +116,10 @@ Configure mixed occupants independently:
 ```yaml
 koi:
   volume: 0.8
-blossom:
+cherry-blossom:
   volume: 1.5
+leaf:
+  volume: 0.8
 ```
 
 Volume multipliers for every occupant are globally clamped to `0.25–3`. The engine exports this shared contract as `AsciiKoi.PondVolumeBounds`. Volume affects population, not physical size.

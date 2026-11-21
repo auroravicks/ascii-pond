@@ -120,13 +120,13 @@
   const VARIETY = ["kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "tancho", "sanke", "kohaku", "sanke", "kohaku"];
   const COLOURS = ["course", "vermilion", "gold", "sakura"];
   /* Public occupant names. Hosts pass createPond({ occupants: [...] }). */
-  const PondOccupant = Object.freeze({ KOI: "koi", BLOSSOM: "blossom" });
+  const PondOccupant = Object.freeze({ KOI: "koi", CHERRY_BLOSSOM: "cherry-blossom", LEAF: "leaf" });
   const PondScale = Object.freeze({ RANDOM: "random" });
   const PondSizeBounds = Object.freeze({ min: 1, max: 100 });
   const PondVolumeBounds = Object.freeze({ min: 0.25, max: 3 });
   /* One discoverable interaction table for hosts and future occupant adapters. */
   const PondInteractions = Object.freeze({
-    paw: Object.freeze({ koi: "flee-and-return", blossom: "scatter" }),
+    paw: Object.freeze({ koi: "flee-and-return", "cherry-blossom": "scatter", leaf: "scatter" }),
     food: Object.freeze({ koi: "seek-and-eat" })
   });
   /* the most one joint of a koi turns from the one in front of it, in radians */
@@ -164,8 +164,8 @@
   const LEG = 8.4, HAND = 10, TOES = [-1.12, -0.38, 0.38, 1.12];
   /* Fish food: how long a pellet floats before it sinks out of sight, and how long it takes to sink. */
   const FLOAT = 16, SINKING = 2.5;
-  /* Cherry blossoms rest on the surface for a while, then waterlog and sink slowly out of sight. */
-  const BLOSSOM_SINKING = 7;
+  /* Small surface occupants rest for a while, then waterlog and sink slowly out of sight. */
+  const SURFACE_SINKING = 7;
   const STEP = 1 / 60;
 
   /*
@@ -181,7 +181,7 @@
     /* Size establishes each kind's absolute order of magnitude. Scale is a
        separate, shared 1–5 relative level; "random" chooses a seeded level. */
     const SCALE_MIN = 1, SCALE_MAX = 5, occupantSize = opts.occupantSize || {}, occupantScale = opts.occupantScale || {};
-    const defaultSize = Object.freeze({ [PondOccupant.KOI]: 75, [PondOccupant.BLOSSOM]: 8 });
+    const defaultSize = Object.freeze({ [PondOccupant.KOI]: 75, [PondOccupant.CHERRY_BLOSSOM]: 8, [PondOccupant.LEAF]: 12 });
     /* Preserve the original koi's visual scale: its former 128–180px range
        has a 154px midpoint, represented by logical size 75 at scale level 3. */
     const KOI_PHYSICAL_UNIT = 154 / 75;
@@ -208,7 +208,8 @@
     }
     const scaleLevels = Object.freeze({
       [PondOccupant.KOI]: scaleSpec(PondOccupant.KOI),
-      [PondOccupant.BLOSSOM]: scaleSpec(PondOccupant.BLOSSOM)
+      [PondOccupant.CHERRY_BLOSSOM]: scaleSpec(PondOccupant.CHERRY_BLOSSOM),
+      [PondOccupant.LEAF]: scaleSpec(PondOccupant.LEAF)
     });
     function sizingFor(kind, seed) {
       const spec = scaleLevels[kind] || scaleSpec(kind);
@@ -241,8 +242,8 @@
     let tileRGB, tileA, glyphRGB, glyphA, glyphCode, shade, wake, wakeTmp, tintRGB, tintA;
     const touched = [];
     let fish = [];
-    const paws = [], rings = [], drops = [], food = [], bubbles = [], blossoms = [];
-    let blossomSerial = 0, nextBlossom = 0;
+    const paws = [], rings = [], drops = [], food = [], bubbles = [], cherryBlossoms = [], leaves = [];
+    let cherryBlossomSerial = 0, nextCherryBlossom = 0, leafSerial = 0, nextLeaf = 0;
     /* events for a film: { at, fn } run when the simulation passes them */
     const plan = [];
     let planAt = 0;
@@ -563,11 +564,19 @@
         if (i < 2) { const o = (i ? 1 : -1) * 34 * p.k; f.seekX = x - s.vx * o; f.seekY = y - s.vy * o; f.seekFrom = t + 1.3 + i * 0.5; f.seekUntil = f.seekFrom + 3.5; }
       });
       /* Surface petals skate away from the paw; sunken ones only sway a little. */
-      for (const b of blossoms) {
+      for (const b of cherryBlossoms) {
         const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1;
         if (d < reach * 0.72) {
           const push = (1 - d / (reach * 0.72)) * (b.sinking ? 24 : 80) * p.k;
           b.vx += dx / d * push; b.vy += dy / d * push; b.spin += s.side * push * 0.018;
+        }
+      }
+      for (const leaf of leaves) {
+        const dx = leaf.x - x, dy = leaf.y - y, d = Math.hypot(dx, dy) || 1;
+        if (d < reach * 0.8) {
+          const push = (1 - d / (reach * 0.8)) * 42 * p.k;
+          leaf.vx += dx / d * push; leaf.vy += dy / d * push;
+          leaf.spin += s.side * push * 0.012;
         }
       }
     }
@@ -795,31 +804,31 @@
       ctx.globalAlpha = 1;
     }
 
-    /* ── cherry blossoms ── */
-    function addBlossom(initial = false) {
-      const seed = blossomSerial++ * 149 + 37;
-      const sizing = sizingFor(PondOccupant.BLOSSOM, seed);
+    /* ── cherry-blossom petals ── */
+    function addCherryBlossom(initial = false) {
+      const seed = cherryBlossomSerial++ * 149 + 37;
+      const sizing = sizingFor(PondOccupant.CHERRY_BLOSSOM, seed);
       /* New petals land across the water instead of continually entering at
          one edge, which otherwise makes the steady-state population hug it. */
       const x = h2(seed, 2) * vw, y = h2(seed, 3) * vh;
       const age = initial ? h2(seed, 4) * 22 : 0;
-      blossoms.push({
+      cherryBlossoms.push({
         seed, x, y, vx: (h2(seed, 5) - 0.5) * 12, vy: (h2(seed, 7) - 0.5) * 7,
         angle: h2(seed, 8) * Math.PI * 2, spin: (h2(seed, 9) - 0.5) * 0.7,
         scaleLevel: sizing.level, size: sizing.size, physicalSize: sizing.physicalSize,
         land: t - age, soak: 15 + h2(seed, 10) * 17, sinking: false, depth: 0
       });
     }
-    function stepBlossoms(dt) {
-      if (!occupants.has(PondOccupant.BLOSSOM)) return;
-      if (t >= nextBlossom) {
-        addBlossom();
-        nextBlossom = t + (0.45 + h2(blossomSerial, 71) * 0.75) / volumeFor(PondOccupant.BLOSSOM);
+    function stepCherryBlossoms(dt) {
+      if (!occupants.has(PondOccupant.CHERRY_BLOSSOM)) return;
+      if (t >= nextCherryBlossom) {
+        addCherryBlossom();
+        nextCherryBlossom = t + (0.45 + h2(cherryBlossomSerial, 71) * 0.75) / volumeFor(PondOccupant.CHERRY_BLOSSOM);
       }
-      for (const b of blossoms) {
+      for (const b of cherryBlossoms) {
         const age = t - b.land;
         if (!b.sinking && age >= b.soak) { b.sinking = true; rings.push({ x: b.x, y: b.y, born: t, k: K * 0.32, small: true, tiny: true }); }
-        b.depth = b.sinking ? clamp((age - b.soak) / BLOSSOM_SINKING, 0, 1) : 0;
+        b.depth = b.sinking ? clamp((age - b.soak) / SURFACE_SINKING, 0, 1) : 0;
         /* Two broad currents keep the motion organic while remaining deterministic. */
         const margin = Math.min(56, Math.min(vw, vh) * 0.1);
         const edgeX = b.x < margin ? (margin - b.x) * 0.09 : b.x > vw - margin ? (vw - margin - b.x) * 0.09 : 0;
@@ -835,16 +844,16 @@
         if (!b.sinking && b.y < -36) b.y = vh + 18;
         else if (!b.sinking && b.y > vh + 36) b.y = -18;
       }
-      for (let j = blossoms.length - 1; j >= 0; j--) {
-        const b = blossoms[j];
-        if (b.depth >= 1 || (b.sinking && b.y > vh + 28)) blossoms.splice(j, 1);
+      for (let j = cherryBlossoms.length - 1; j >= 0; j--) {
+        const b = cherryBlossoms[j];
+        if (b.depth >= 1 || (b.sinking && b.y > vh + 28)) cherryBlossoms.splice(j, 1);
       }
-      const limit = Math.max(10, Math.round(64 * volumeFor(PondOccupant.BLOSSOM)));
-      while (blossoms.length > limit) blossoms.shift();
+      const limit = Math.max(10, Math.round(64 * volumeFor(PondOccupant.CHERRY_BLOSSOM)));
+      while (cherryBlossoms.length > limit) cherryBlossoms.shift();
     }
-    function drawBlossoms(sunken) {
-      if (!occupants.has(PondOccupant.BLOSSOM) || !blossoms.length) return;
-      for (const b of blossoms) {
+    function drawCherryBlossoms(sunken) {
+      if (!occupants.has(PondOccupant.CHERRY_BLOSSOM) || !cherryBlossoms.length) return;
+      for (const b of cherryBlossoms) {
         if (b.sinking !== sunken) continue;
         const fade = 1 - b.depth, depthScale = 1 - b.depth * 0.28;
         if (fade <= 0) continue;
@@ -852,8 +861,8 @@
            wind-bent teardrop. Keep one pointed attachment end and an
            asymmetric rounded blade; paired lobes read as a heart at this size. */
         const tone = h2(b.seed, 13), petal = tone < 0.5
-          ? mixC(P.blossomDark, P.blossom, tone * 2)
-          : mixC(P.blossom, P.blossomPale, (tone - 0.5) * 2);
+          ? mixC(P.cherryBlossomDark, P.cherryBlossom, tone * 2)
+          : mixC(P.cherryBlossom, P.cherryBlossomPale, (tone - 0.5) * 2);
         const w = b.physicalSize * (0.62 + h2(b.seed, 14) * 0.25), h = b.physicalSize * (0.72 + h2(b.seed, 15) * 0.24);
         /* A slow width change makes the petal turn edge-on as it tumbles. */
         const face = 0.3 + 0.7 * Math.abs(Math.sin(t * (0.42 + h2(b.seed, 16) * 0.35) + b.seed));
@@ -867,9 +876,57 @@
         ctx.bezierCurveTo(w * 0.3, h * 0.34, w * 0.12, h * 0.45, 0, h * 0.52);
         ctx.fill();
         /* A short translucent vein adds form without outlining every petal. */
-        ctx.globalAlpha = fade * 0.18; ctx.strokeStyle = css(pack(P.blossomDark)); ctx.lineWidth = Math.max(0.65, cw * 0.07);
+        ctx.globalAlpha = fade * 0.18; ctx.strokeStyle = css(pack(P.cherryBlossomDark)); ctx.lineWidth = Math.max(0.65, cw * 0.07);
         ctx.beginPath(); ctx.moveTo(0, h * 0.43); ctx.quadraticCurveTo(-w * 0.08, h * 0.06, w * 0.03, -h * 0.27); ctx.stroke();
         ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    /* ── drifting leaves ── */
+    function addLeaf(initial = false) {
+      const seed = leafSerial++ * 173 + 61, sizing = sizingFor(PondOccupant.LEAF, seed);
+      const age = initial ? h2(seed, 4) * 25 : 0;
+      leaves.push({
+        seed, x: h2(seed, 2) * vw, y: h2(seed, 3) * vh,
+        vx: (h2(seed, 5) - 0.5) * 10, vy: (h2(seed, 6) - 0.5) * 6,
+        angle: h2(seed, 7) * Math.PI * 2, spin: (h2(seed, 8) - 0.5) * 0.55,
+        scaleLevel: sizing.level, size: sizing.size, physicalSize: sizing.physicalSize,
+        land: t - age, soak: 18 + h2(seed, 9) * 22, sinking: false, depth: 0
+      });
+    }
+    function stepLeaves(dt) {
+      if (!occupants.has(PondOccupant.LEAF)) return;
+      if (t >= nextLeaf) {
+        addLeaf(); nextLeaf = t + (0.8 + h2(leafSerial, 81) * 1.1) / volumeFor(PondOccupant.LEAF);
+      }
+      for (const leaf of leaves) {
+        const age = t - leaf.land;
+        if (!leaf.sinking && age >= leaf.soak) { leaf.sinking = true; rings.push({ x: leaf.x, y: leaf.y, born: t, k: K * 0.35, small: true, tiny: true }); }
+        leaf.depth = leaf.sinking ? clamp((age - leaf.soak) / SURFACE_SINKING, 0, 1) : 0;
+        const currentX = Math.sin(t * 0.17 + leaf.seed) * 4 + Math.sin(leaf.y / 140 + t * 0.09) * 2;
+        const currentY = Math.cos(t * 0.13 + leaf.seed * 0.7) * 2 + (leaf.sinking ? 7 : 0);
+        leaf.vx = lerp(leaf.vx, currentX, Math.min(1, dt * 0.55)); leaf.vy = lerp(leaf.vy, currentY, Math.min(1, dt * 0.5));
+        leaf.x += leaf.vx * dt; leaf.y += leaf.vy * dt; leaf.angle += (leaf.spin + Math.sin(t * 0.35 + leaf.seed) * 0.12) * dt;
+        leaf.vx *= Math.exp(-dt * 0.16); leaf.vy *= Math.exp(-dt * 0.12); leaf.spin *= Math.exp(-dt * 0.08);
+        if (leaf.x < -36) leaf.x = vw + 18; else if (leaf.x > vw + 36) leaf.x = -18;
+        if (!leaf.sinking && leaf.y < -36) leaf.y = vh + 18; else if (!leaf.sinking && leaf.y > vh + 36) leaf.y = -18;
+      }
+      for (let j = leaves.length - 1; j >= 0; j--) if (leaves[j].depth >= 1 || (leaves[j].sinking && leaves[j].y > vh + 28)) leaves.splice(j, 1);
+      const limit = Math.max(6, Math.round(30 * volumeFor(PondOccupant.LEAF))); while (leaves.length > limit) leaves.shift();
+    }
+    function drawLeaves(sunken) {
+      if (!occupants.has(PondOccupant.LEAF)) return;
+      for (const leaf of leaves) {
+        if (leaf.sinking !== sunken) continue;
+        const fade = 1 - leaf.depth, w = leaf.physicalSize * (0.55 + h2(leaf.seed, 11) * 0.18), h = leaf.physicalSize * (0.9 + h2(leaf.seed, 12) * 0.22);
+        const tone = h2(leaf.seed, 13), colour = tone < 0.5 ? mixC(P.leafDark, P.leaf, tone * 2) : mixC(P.leaf, P.leafPale, (tone - 0.5) * 2);
+        ctx.save(); ctx.translate(leaf.x, leaf.y); ctx.rotate(leaf.angle); ctx.scale(1 - leaf.depth * 0.25, 1 - leaf.depth * 0.25);
+        ctx.globalAlpha = fade * 0.9; ctx.fillStyle = css(pack(colour)); ctx.beginPath();
+        ctx.moveTo(0, -h * 0.55); ctx.bezierCurveTo(w * 0.72, -h * 0.25, w * 0.58, h * 0.25, 0, h * 0.55);
+        ctx.bezierCurveTo(-w * 0.58, h * 0.25, -w * 0.72, -h * 0.25, 0, -h * 0.55); ctx.fill();
+        ctx.globalAlpha = fade * 0.28; ctx.strokeStyle = css(pack(P.leafVein)); ctx.lineWidth = Math.max(0.65, cw * 0.07);
+        ctx.beginPath(); ctx.moveTo(0, h * 0.48); ctx.lineTo(0, -h * 0.46); ctx.stroke(); ctx.restore();
       }
       ctx.globalAlpha = 1;
     }
@@ -901,7 +958,8 @@
       step(dt);
       stepPaws(dt);
       stepFood(dt);
-      stepBlossoms(dt);
+      stepCherryBlossoms(dt);
+      stepLeaves(dt);
     }
 
     /* ── colours ── */
@@ -918,9 +976,13 @@
         fin: dark ? mixC(light, water, 0.25) : mixC(water, black, 0.34),
         dot: dark ? light : ink,
         food: dark ? [206, 142, 74] : [150, 92, 40],
-        blossomDark: dark ? [210, 72, 116] : [176, 48, 94],
-        blossom: dark ? [244, 142, 166] : [218, 105, 135],
-        blossomPale: dark ? [255, 238, 241] : [255, 244, 244]
+        cherryBlossomDark: dark ? [210, 72, 116] : [176, 48, 94],
+        cherryBlossom: dark ? [244, 142, 166] : [218, 105, 135],
+        cherryBlossomPale: dark ? [255, 238, 241] : [255, 244, 244],
+        leafDark: dark ? [46, 102, 72] : [45, 98, 62],
+        leaf: dark ? [91, 153, 105] : [83, 139, 86],
+        leafPale: dark ? [165, 194, 126] : [142, 169, 91],
+        leafVein: dark ? [203, 219, 158] : [47, 91, 52]
       };
       const scheme = (red, white, black) => {
         /* Pale skin needs a real value step from light water; otherwise only
@@ -955,7 +1017,7 @@
       ctx.fillStyle = css(pack(P.water));
       ctx.fillRect(0, 0, vw, vh);
       /* Submerged petals sit below fish, shadows, wakes and surface light. */
-      drawBlossoms(true);
+      drawCherryBlossoms(true); drawLeaves(true);
       ctx.font = `600 ${Math.round(ch * 0.74)}px ${MONO}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
@@ -1001,7 +1063,8 @@
         ctx.globalAlpha = glyphA[i]; ctx.fillText(String.fromCharCode(glyphCode[i]), (i % cols) * cw + cw / 2, ((i / cols) | 0) * ch + ch / 2);
       }
       drawFood();
-      drawBlossoms(false);
+      drawCherryBlossoms(false);
+      drawLeaves(false);
       for (const p of paws) drawPaw(p);
       ctx.globalAlpha = 1;
     }
@@ -1009,15 +1072,19 @@
     /* From scratch: the shoal, then a few seconds of swimming so it starts in natural curves. */
     function reset() {
       makeFish();
-      paws.length = rings.length = drops.length = food.length = bubbles.length = blossoms.length = 0;
-      blossomSerial = 0; nextBlossom = 1.2;
+      paws.length = rings.length = drops.length = food.length = bubbles.length = cherryBlossoms.length = leaves.length = 0;
+      cherryBlossomSerial = 0; nextCherryBlossom = 1.2; leafSerial = 0; nextLeaf = 1.6;
       wake.fill(0); wakeTmp.fill(0);
       t = 0;
       const n = count();
       fish.forEach((f, i) => { f.seen = i < n ? 1 : 0; });
-      if (occupants.has(PondOccupant.BLOSSOM)) {
-        const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.BLOSSOM)));
-        for (let j = 0; j < initial; j++) addBlossom(true);
+      if (occupants.has(PondOccupant.CHERRY_BLOSSOM)) {
+        const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.CHERRY_BLOSSOM)));
+        for (let j = 0; j < initial; j++) addCherryBlossom(true);
+      }
+      if (occupants.has(PondOccupant.LEAF)) {
+        const initial = Math.max(5, Math.round(16 * volumeFor(PondOccupant.LEAF)));
+        for (let j = 0; j < initial; j++) addLeaf(true);
       }
       for (let j = 0; j < 90; j++) { t += 1 / 30; step(1 / 30); }
       simT = 0; planAt = 0;
@@ -1078,7 +1145,8 @@
       /* for tests: the koi and the food */
       get fish() { return fish; },
       get food() { return food; },
-      get blossoms() { return blossoms; },
+      get cherryBlossoms() { return cherryBlossoms; },
+      get leaves() { return leaves; },
       get occupants() { return [...occupants]; },
       get scaleLevels() { return scaleLevels; },
       get volumes() { return Object.fromEntries([...occupants].map(kind => [kind, volumeFor(kind)])); },
@@ -1097,9 +1165,13 @@
         if (kind === PondOccupant.KOI) {
           makeFish();
         }
-        if (kind === PondOccupant.BLOSSOM && wake) {
-          const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.BLOSSOM)));
-          for (let j = 0; j < initial; j++) addBlossom(true);
+        if (kind === PondOccupant.CHERRY_BLOSSOM && wake) {
+          const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.CHERRY_BLOSSOM)));
+          for (let j = 0; j < initial; j++) addCherryBlossom(true);
+        }
+        if (kind === PondOccupant.LEAF && wake) {
+          const initial = Math.max(5, Math.round(16 * volumeFor(PondOccupant.LEAF)));
+          for (let j = 0; j < initial; j++) addLeaf(true);
         }
         settleKoiVisibility();
         dirty = true; return true;
@@ -1110,7 +1182,8 @@
           fish = [];
           food.length = bubbles.length = 0;
         }
-        if (kind === PondOccupant.BLOSSOM) blossoms.length = 0;
+        if (kind === PondOccupant.CHERRY_BLOSSOM) cherryBlossoms.length = 0;
+        if (kind === PondOccupant.LEAF) leaves.length = 0;
         settleKoiVisibility();
         dirty = true; return true;
       },

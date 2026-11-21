@@ -1,12 +1,17 @@
 # Copy to config.yml. The copy is gitignored.
 occupants:
   - koi
-  - blossom
+  - cherry-blossom
+  - leaf
 koi:
   volume: auto
   size: 75
   scale: random
-blossom:
+cherry-blossom:
   volume: auto
   size: 8
+  scale: random
+leaf:
+  volume: auto
+  size: 12
   scale: random

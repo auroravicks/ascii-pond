@@ -66,23 +66,25 @@
     if (raw === null) return null;
     try {
       const value = JSON.parse(raw);
-      return Array.isArray(value) ? [...new Set(value.filter(kind => knownOccupants.includes(kind)))] : null;
+      if (!Array.isArray(value)) return null;
+      return [...new Set(value.filter(kind => knownOccupants.includes(kind)))];
     } catch (e) { return null; }
   };
   /* Occupants are a list, not a combination enum. Browser choices override
      the extension-local config; URLs do not carry persistent preferences. */
   const localOccupants = config === null ? knownOccupants
-    : Array.isArray(config.occupants) ? config.occupants : [];
+    : Array.isArray(config.occupants) ? [...new Set(config.occupants.filter(kind => knownOccupants.includes(kind)))] : [];
   const browserOccupants = readOccupantPreference();
   const requestedOccupants = browserOccupants ?? localOccupants;
   /* Configuration belongs to each selected occupant. Unselected sections are
      deliberately ignored; "auto", null and absent values keep engine defaults. */
+  const occupantConfig = kind => config && config[kind];
   const numericOccupantSetting = key => Object.fromEntries(requestedOccupants.flatMap(kind => {
-    const value = config && config[kind] && config[kind][key];
+    const section = occupantConfig(kind), value = section && section[key];
     return typeof value === "number" && Number.isFinite(value) ? [[kind, value]] : [];
   }));
   const scaleSetting = Object.fromEntries(requestedOccupants.flatMap(kind => {
-    const value = config && config[kind] && config[kind].scale;
+    const section = occupantConfig(kind), value = section && section.scale;
     const valid = value === "random" || typeof value === "number" && Number.isFinite(value)
       || Array.isArray(value) && value.some(v => typeof v === "number" && Number.isFinite(v));
     return valid ? [[kind, value]] : [];

@@ -21,7 +21,7 @@
 | **Tap / hold** | The same on a phone or tablet: tap for the paw, hold for food. |
 | **`1` `2` `3` or `T`** | Three waters: **pond** (deep lake teal), **black** and **light**. The new water spreads out like a ripple from where you chose it. |
 | **`Space`** | Freeze the pond. |
-| **Three-bar menu** | Open the side panel for water, pause, help, and remembered koi/blossom choices. |
+| **Three-bar menu** | Open the side panel for water, pause, help, and remembered koi, cherry-petal, and leaf choices. |
 
 The clock is not a font. It is the outline of Noto Serif Display sampled into character cells: the contour becomes `| / - \` strokes, the strokes become solid tiles, and every koi that swims underneath tints the digits in its own colours while a caustic light net plays across them.
 
@@ -35,7 +35,7 @@ Chrome, Edge, Brave, Arc and every other Chromium browser:
 
 Open a new tab. You have a pond.
 
-To make a persistent koi-only, blossom-only or mixed extension variant, copy `config.example.yml` to the gitignored `config.yml`; see [extension variants](docs/extension-variants.md).
+To make a persistent occupant variant, copy `config.example.yml` to the gitignored `config.yml`; see [extension variants](docs/extension-variants.md).
 
 Any other browser: set your home page to **https://pursurer.github.io/ascii-koi/**.
 
@@ -52,7 +52,7 @@ Any other browser: set your home page to **https://pursurer.github.io/ascii-koi/
 - **Koi.** Each fish is a chain of ten spine nodes trailing its head, with a travelling body wave. Every character cell is sampled against the nearest point on the spine (plus sub-samples for soft edges), classified as body, fin, eye or barbel, coloured by the fish's own markings (kohaku, sanke, tancho) and shaded by a light from the upper left: lit skin gets sparse glyphs, shadowed skin dense ones. Each koi casts a shadow on the pond floor and leaves a wake.
 - **Water.** Two drifting noise fields; where they meet, light gathers in a thin moving net of `· - ~`, and the scales glint `*` where it crosses a back.
 - **Deterministic.** For a recording the simulation steps forward in fixed 1/60 s steps, so the same events always give the same frame. The film above was rendered frame by frame from this exact engine with [huashu-motion](https://github.com/alchaincyf/huashu-motion); nothing in it is mocked up.
-- **Occupants.** Choose koi, drifting cherry petals or both. Mixed ponds balance their populations automatically, and every occupant uses the same five-level logical size system. See [occupant configuration](docs/occupants.md).
+- **Occupants.** Choose koi, drifting cherry petals, floating leaves, or any combination. Mixed ponds balance their populations automatically, and every occupant uses the same five-level logical size system. See [occupant configuration](docs/occupants.md).
 - **Small.** Vanilla JavaScript, no build step, no dependencies: `pond.js` (the engine) and `app.js` (the page) are about 1,200 lines together, plus two web fonts (37 KB).
 
 <!-- family:start -->

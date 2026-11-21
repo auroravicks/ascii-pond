@@ -1,6 +1,6 @@
 # Pond occupants
 
-The pond currently knows two occupant types: `koi` and `blossom`. The page reads the list from browser preferences or local `config.yml`; URLs do not override it.
+The pond currently knows three occupant types: `koi`, `cherry-blossom` (individual cherry petals), and `leaf` (individual drifting leaves). The page reads the list from browser preferences or local `config.yml`; URLs do not override it.
 
 Hosts choose the same list when creating the engine:
 
@@ -8,7 +8,7 @@ Hosts choose the same list when creating the engine:
 const pond = createPond({
   canvas,
   palette,
-  occupants: ["koi", "blossom"]
+  occupants: ["koi", "cherry-blossom", "leaf"]
 });
 ```
 
@@ -16,7 +16,7 @@ Use `addOccupant`, `removeOccupant` and `setOccupants` to change the list at run
 
 ## Absolute size and relative scale
 
-Every occupant separates its absolute `size` from its relative `scale`. Absolute size uses one global `1–100` domain: koi default to `75`, while petals default to `8`, preserving their different orders of magnitude.
+Every occupant separates its absolute `size` from its relative `scale`. Absolute size uses one global `1–100` domain: koi default to `75`, leaves to `12`, and cherry petals to `8`, preserving their different orders of magnitude.
 
 Relative scale is standardized to levels `1–5`. The exported enum value `PondScale.RANDOM` gives every instance a deterministic seeded level across the full range. A numeric level locks the type; an array such as `[1, 3, 5]` selects deterministically from that set.
 
@@ -28,16 +28,18 @@ Set absolute sizes and relative scales independently:
 createPond({
   occupantSize: {
     koi: 82,
-    blossom: 8
+    "cherry-blossom": 8,
+    leaf: 12
   },
   occupantScale: {
     koi: 4,
-    blossom: [1, 3, 5]
+    "cherry-blossom": [1, 3, 5],
+    leaf: "random"
   }
 });
 ```
 
-Absolute sizes and the final logical size are globally clamped to `1–100`; the bound is exported as `PondSizeBounds`. Koi retain the original renderer's visual scale: logical size `75` at scale level `3` maps to the legacy `154px` midpoint of its former `128–180px` range. Other occupant renderers interpret the same logical domain according to their geometry. Invalid values fall back to type defaults. Numeric scales and list entries are rounded and clamped to `1–5`; duplicates are removed, while invalid or omitted scales use `random`. Read the resolved configuration from `pond.scaleLevels`; instances expose logical `size`, chosen `scaleLevel`, and rendered `physicalSize` through `pond.fish` and `pond.blossoms`.
+Absolute sizes and the final logical size are globally clamped to `1–100`; the bound is exported as `PondSizeBounds`. Koi retain the original renderer's visual scale: logical size `75` at scale level `3` maps to the legacy `154px` midpoint of its former `128–180px` range. Other occupant renderers interpret the same logical domain according to their geometry. Invalid values fall back to type defaults. Numeric scales and list entries are rounded and clamped to `1–5`; duplicates are removed, while invalid or omitted scales use `random`. Read the resolved configuration from `pond.scaleLevels`; instances expose logical `size`, chosen `scaleLevel`, and rendered `physicalSize` through `pond.fish`, `pond.cherryBlossoms`, and `pond.leaves`.
 
 ## Population volume
 
@@ -55,7 +57,8 @@ Or set it by type:
 createPond({
   occupantVolume: {
     koi: 0.8,
-    blossom: 1.5
+    "cherry-blossom": 1.5,
+    leaf: 0.8
   }
 });
 ```
