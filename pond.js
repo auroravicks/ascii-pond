@@ -1,5 +1,5 @@
 /*
- * ASCII Koi: a koi pond drawn in character cells.
+ * ASCII Pond: a configurable pond drawn in character cells.
  *
  * Each koi is a chain of spine nodes that trails its head, plus a travelling
  * body wave. Every character cell is sampled against the nearest point on the

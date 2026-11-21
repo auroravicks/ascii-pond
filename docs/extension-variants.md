@@ -4,7 +4,7 @@ The unpacked Chromium extension and the hosted page run the same files. Personal
 
 ## Install a variant
 
-1. Clone or download the repository.
+1. Clone `https://github.com/auroravicks/ascii-pond.git`, or download and extract this fork from GitHub.
 2. Copy `config.example.yml` to `config.yml` and edit it using one of the examples below.
 3. Open `chrome://extensions` in Chrome, Edge, Brave, Arc or another Chromium browser.
 4. Turn on **Developer mode**, choose **Load unpacked**, and select this repository folder.
@@ -26,6 +26,17 @@ occupants:
 koi:
   volume: auto
   size: 75
+  scale: random
+```
+
+Arapaima only:
+
+```yaml
+occupants:
+  - arapaima
+arapaima:
+  volume: auto
+  size: 100
   scale: random
 ```
 
@@ -78,6 +89,8 @@ leaf:
 ```
 
 An empty file or an empty `occupants` list creates water without occupants. A missing or unreadable `config.yml` uses the built-in default occupants. Unknown names are ignored. The canonical names are exported as `AsciiKoi.PondOccupant`.
+
+The side panel exposes the same occupant names. A saved browser selection takes precedence over this list, including after `config.yml` changes.
 
 ## Absolute size and relative scale
 

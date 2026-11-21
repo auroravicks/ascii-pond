@@ -14,6 +14,13 @@ const pond = createPond({
 
 Use `addOccupant`, `removeOccupant` and `setOccupants` to change the list at runtime. `PondOccupant` contains the supported names, and `PondInteractions` describes the built-in paw and food responses.
 
+| Interaction | Koi | Arapaima | Cherry blossom | Leaf |
+|---|---|---|---|---|
+| Cat paw / tap | Flee, then return or investigate | Animate a dive and remain deep briefly | Scatter across the surface | Scatter across the surface |
+| Food / hold or right-click | Seek and eat pellets | No response | No response | No response |
+
+Arapaima otherwise follow their own staggered breathing cycle: the pair spends most of its time as faint deep-water shadows, rises briefly, gulps at the surface, and descends again.
+
 ## Absolute size and relative scale
 
 Every occupant separates its absolute `size` from its relative `scale`. Absolute size uses one global `1–100` domain: arapaima default to `100`, koi to `75`, leaves to `12`, and cherry petals to `8`, preserving their different orders of magnitude.

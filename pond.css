@@ -1,4 +1,4 @@
-/* ASCII Koi: three waters. Each is a set of tokens; the pond reads them from :root.
+/* ASCII Pond: three waters. Each is a set of tokens; the pond reads them from :root.
    One colour of water, the koi as the only texture, a faint caustic net, and a clear space for the clock. */
 @font-face { font-family: "Noto Serif Display"; font-weight: 700; font-display: swap; src: url("fonts/noto-serif-display-700.woff2") format("woff2"); }
 @font-face { font-family: "Geist Mono"; font-weight: 100 900; font-display: swap; src: url("fonts/geist-mono.woff2") format("woff2"); }

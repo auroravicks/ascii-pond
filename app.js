@@ -213,7 +213,7 @@
     dateLine.textContent = current.date;
     return Promise.all([title.build(clock()), tag.build(clock() + 0.35)]);
   };
-  srTitle.textContent = own ? `${current.title} ${current.tag}` : "ASCII Koi";
+  srTitle.textContent = own ? `${current.title} ${current.tag}` : "ASCII Pond";
 
   let lastWords = 0;
   function frame(now) {

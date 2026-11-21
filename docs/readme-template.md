@@ -1,6 +1,6 @@
-# README template for the ASCII Koi family
+# README conventions inherited from ASCII Koi
 
-Every family repository uses this shape, so the projects read as one series.
+This file documents the upstream README structure retained by the fork. ASCII Pond may diverge where its installation, occupant system, and attribution require different content.
 
 ```markdown
 # <Product name>
@@ -30,8 +30,8 @@ Every family repository uses this shape, so the projects read as one series.
 MIT.
 ```
 
-- **Family block.** Keep the two markers. `node scripts/family.mjs` (in ascii-koi) fills the block from `docs/family.md` in every family repository checked out next to ascii-koi; `--check` only reports. Change the family table in `docs/family.md` only.
-- **Repository name.** The product's own name in kebab case: `codex-koi`, `one-page-is-all-you-need`.
+- **Lineage block.** Keep the two markers. In this fork, `docs/family.md` acknowledges the upstream project and describes ASCII Pond's additions. Review generated changes before running the inherited `scripts/family.mjs` workflow against sibling repositories.
+- **Repository name.** This fork is `ascii-pond`; do not replace setup links with the upstream `ascii-koi` clone URL.
 - **Description.** One plain sentence about what the user gets, no emoji.
 - **Topics.** Always `ascii-koi` and `ascii-art`, then what the product runs on, for example `codex`, `claude-code`, `n8n`.
 - **Media.** Rendered from the real code, never mocked up. Keep the black water (`#0d1315`) as the background.
