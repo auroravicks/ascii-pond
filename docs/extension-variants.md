@@ -56,11 +56,16 @@ Mixed pond:
 ```yaml
 occupants:
   - koi
+  - arapaima
   - cherry-blossom
   - leaf
 koi:
   volume: auto
   size: 75
+  scale: random
+arapaima:
+  volume: auto
+  size: 100
   scale: random
 cherry-blossom:
   volume: auto
@@ -76,7 +81,7 @@ An empty file or an empty `occupants` list creates water without occupants. A mi
 
 ## Absolute size and relative scale
 
-`size` establishes an occupant type's absolute order of magnitude on one shared `1–100` domain. Koi default to `75`, leaves to `12`, and cherry petals to `8`. Override it with any number—the engine clamps both the base and final scaled result to that global range:
+`size` establishes an occupant type's absolute order of magnitude on one shared `1–100` domain. Arapaima default to `100`, koi to `75`, leaves to `12`, and cherry petals to `8`. Override it with any number—the engine clamps both the base and final scaled result to that global range:
 
 ```yaml
 koi:
@@ -90,6 +95,9 @@ koi:
 koi:
   size: 75
   scale: 4
+arapaima:
+  size: 100
+  scale: random
 cherry-blossom:
   size: 8
   scale: [1, 3, 5]
@@ -100,7 +108,7 @@ leaf:
 
 Absolute and final scaled sizes are globally clamped to `1–100`. Numeric scale levels and list entries are rounded and clamped to `1–5`; duplicates are removed. Different default absolute sizes preserve each occupant's order of magnitude.
 
-For koi, logical size `75` at scale level `3` renders at `154px`, the midpoint of the original project's `128–180px` koi range. This preserves the established visual scale while keeping configuration values on the shared logical `1–100` domain.
+Without a giant occupant, logical koi size `75` at scale level `3` has the original project's `154px` model length. Arapaima use a dominant `300px` model length at logical size `100`; both then pass through the same viewport scale and cell rasterizer. In mixed ponds containing arapaima, koi render at 76% and surface occupants at 84% of their standalone physical mappings; their configured logical sizes remain unchanged. This preserves the shared logical `1–100` domain while giving the scene a believable size hierarchy.
 
 ## Population volume
 
@@ -116,6 +124,8 @@ Configure mixed occupants independently:
 ```yaml
 koi:
   volume: 0.8
+arapaima:
+  volume: 1
 cherry-blossom:
   volume: 1.5
 leaf:
@@ -126,6 +136,6 @@ Volume multipliers for every occupant are globally clamped to `0.25–3`. The en
 
 ## Engine API
 
-Hosts embedding `pond.js` directly pass the same options to `createPond`. Runtime methods `addOccupant`, `removeOccupant` and `setOccupants` change the active list. Calling `setOccupants` resets simulation time and deterministic state; individual add/remove calls preserve the current timeline.
+Hosts embedding `pond.js` directly pass the same options to `createPond`. Runtime methods `addOccupant`, `removeOccupant` and `setOccupants` change the active list without rewinding simulation time or scheduled events. Existing occupants retain their behavioral state; newly selected types receive deterministic initial instances. Adding or removing arapaima rescales existing occupant geometry in place for the scene-wide size hierarchy.
 
 See [pond occupants](occupants.md) for the complete sizing, volume and runtime API reference.

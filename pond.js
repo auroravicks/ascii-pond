@@ -84,6 +84,35 @@
     return fin(s, a, 0.2, 0.9 + 0.45 * (flare - 1), 0.07 * flare, 0.038) || fin(s, a, 0.47, 0.75, 0.038, 0.019);
   }
 
+  const arapaimaHalfW = s => s < 0.08 ? 0.038 + 0.067 * Math.pow(sstep(0, 0.08, s), 0.58)
+    : s < 0.22 ? 0.105 + 0.013 * sstep(0.08, 0.22, s)
+    : s < 0.55 ? 0.118 - 0.013 * sstep(0.22, 0.55, s)
+    : 0.105 * (1 - sstep(0.55, 0.91, s)) + 0.022;
+  function arapaimaFin(s, a, rootS, angle, reach, width) {
+    const ra = arapaimaHalfW(rootS) * 0.9, ca = Math.cos(angle), sa = Math.sin(angle);
+    const ds = s - rootS, da = a - ra, along = ds * ca + da * sa - reach, perp = -ds * sa + da * ca;
+    if ((along / reach) ** 2 + (perp / width) ** 2 > 1) return false;
+    hit.kind = 2; hit.rs = ds; hit.ra = da;
+    return true;
+  }
+  function classifyArapaima(s, a, past, flare, ahead) {
+    hit.kind = 0; hit.across = 1; hit.rs = 1; hit.ra = 0;
+    if (ahead > 0 || past > 0.02) return false;
+    const w = arapaimaHalfW(s);
+    if (s <= 0.91 && a <= w) {
+      hit.across = a / w;
+      hit.kind = s > 0.035 && s < 0.07 && hit.across > 0.56 && hit.across < 0.78 ? 3
+        : s > 0.11 && s < 0.18 && hit.across > 0.68 ? 4 : 1;
+      return true;
+    }
+    if (s > 0.82) {
+      const tw = (0.025 + 0.16 * sstep(0.84, 1, s)) * flare;
+      if (a <= tw && s <= 0.9 + 0.1 * a / tw) { hit.kind = 2; hit.rs = 1; hit.ra = a / tw; return true; }
+    }
+    return arapaimaFin(s, a, 0.2, 1.02, 0.105 * flare, 0.048)
+      || arapaimaFin(s, a, 0.61, 0.72, 0.072, 0.03);
+  }
+
   /* ── markings: kohaku (red saddles), sanke (plus black spots), tancho (red crown) ── */
   function markings(variety, seed) {
     const r = j => h2(seed, j);
@@ -106,6 +135,15 @@
   }
   const inPatch = (m, s, vn, wob) => ((s - m.s) / m.rs) ** 2 + ((vn - m.v) / m.rv) ** 2 < 1 + wob;
   function skin(f, s, vn, across) {
+    if (f.species === "arapaima") {
+      const scaleNoise = noise(s * 20, vn * 34, f.seed);
+      if (s > 0.5 && (across > 0.25 || scaleNoise > 0.38)) return 1;
+      if (s > 0.38 && across > 0.62 && scaleNoise > 0.28) return 1;
+      /* Forward red scale clusters keep the giant legible against every water
+         theme without turning its plated head into one flat block of colour. */
+      if (s <= 0.5 && (scaleNoise > 0.58 || across > 0.7 && scaleNoise > 0.4)) return 1;
+      return noise(s * 25 + f.seed, vn * 42, 91) > 0.8 ? 2 : 0;
+    }
     if (across > 0.9 || s > 0.74) return 0;
     const wob = (noise(s * 13 + f.seed, vn * 28, f.seed) - 0.5) * 0.65;
     for (const m of f.marks.black) if (inPatch(m, s, vn, wob)) return 2;
@@ -120,13 +158,13 @@
   const VARIETY = ["kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "sanke", "kohaku", "tancho", "sanke", "kohaku", "sanke", "kohaku"];
   const COLOURS = ["course", "vermilion", "gold", "sakura"];
   /* Public occupant names. Hosts pass createPond({ occupants: [...] }). */
-  const PondOccupant = Object.freeze({ KOI: "koi", CHERRY_BLOSSOM: "cherry-blossom", LEAF: "leaf" });
+  const PondOccupant = Object.freeze({ KOI: "koi", ARAPAIMA: "arapaima", CHERRY_BLOSSOM: "cherry-blossom", LEAF: "leaf" });
   const PondScale = Object.freeze({ RANDOM: "random" });
   const PondSizeBounds = Object.freeze({ min: 1, max: 100 });
   const PondVolumeBounds = Object.freeze({ min: 0.25, max: 3 });
   /* One discoverable interaction table for hosts and future occupant adapters. */
   const PondInteractions = Object.freeze({
-    paw: Object.freeze({ koi: "flee-and-return", "cherry-blossom": "scatter", leaf: "scatter" }),
+    paw: Object.freeze({ koi: "flee-and-return", arapaima: "dive", "cherry-blossom": "scatter", leaf: "scatter" }),
     food: Object.freeze({ koi: "seek-and-eat" })
   });
   /* the most one joint of a koi turns from the one in front of it, in radians */
@@ -181,7 +219,7 @@
     /* Size establishes each kind's absolute order of magnitude. Scale is a
        separate, shared 1–5 relative level; "random" chooses a seeded level. */
     const SCALE_MIN = 1, SCALE_MAX = 5, occupantSize = opts.occupantSize || {}, occupantScale = opts.occupantScale || {};
-    const defaultSize = Object.freeze({ [PondOccupant.KOI]: 75, [PondOccupant.CHERRY_BLOSSOM]: 8, [PondOccupant.LEAF]: 12 });
+    const defaultSize = Object.freeze({ [PondOccupant.KOI]: 75, [PondOccupant.ARAPAIMA]: 100, [PondOccupant.CHERRY_BLOSSOM]: 8, [PondOccupant.LEAF]: 12 });
     /* Preserve the original koi's visual scale: its former 128–180px range
        has a 154px midpoint, represented by logical size 75 at scale level 3. */
     const KOI_PHYSICAL_UNIT = 154 / 75;
@@ -208,6 +246,7 @@
     }
     const scaleLevels = Object.freeze({
       [PondOccupant.KOI]: scaleSpec(PondOccupant.KOI),
+      [PondOccupant.ARAPAIMA]: scaleSpec(PondOccupant.ARAPAIMA),
       [PondOccupant.CHERRY_BLOSSOM]: scaleSpec(PondOccupant.CHERRY_BLOSSOM),
       [PondOccupant.LEAF]: scaleSpec(PondOccupant.LEAF)
     });
@@ -216,7 +255,11 @@
       const level = spec.values[Math.floor(h2(seed, 811) * spec.values.length)];
       const factor = relativeScale[level - SCALE_MIN];
       const size = clamp(absoluteSizeFor(kind) * factor, PondSizeBounds.min, PondSizeBounds.max);
-      const physicalSize = kind === PondOccupant.KOI ? size * KOI_PHYSICAL_UNIT : size;
+      const withGiant = occupants.has(PondOccupant.ARAPAIMA);
+      const rendererUnit = kind === PondOccupant.ARAPAIMA ? 3
+        : kind === PondOccupant.KOI ? KOI_PHYSICAL_UNIT * (withGiant ? 0.76 : 1)
+        : withGiant ? 0.84 : 1;
+      const physicalSize = size * rendererUnit;
       return { level, factor, size, physicalSize };
     }
     const requested = opts.occupants == null ? Object.values(PondOccupant) : (Array.isArray(opts.occupants) ? opts.occupants : [opts.occupants]);
@@ -242,7 +285,7 @@
     let tileRGB, tileA, glyphRGB, glyphA, glyphCode, shade, wake, wakeTmp, tintRGB, tintA;
     const touched = [];
     let fish = [];
-    const paws = [], rings = [], drops = [], food = [], bubbles = [], cherryBlossoms = [], leaves = [];
+    const paws = [], rings = [], drops = [], food = [], bubbles = [], arapaimas = [], cherryBlossoms = [], leaves = [];
     let cherryBlossomSerial = 0, nextCherryBlossom = 0, leafSerial = 0, nextLeaf = 0;
     /* events for a film: { at, fn } run when the simulation passes them */
     const plan = [];
@@ -419,6 +462,7 @@
     /* ── rasterising one koi into the cell buffers ── */
     const spine = new Float32Array(N * 2), arc = new Float32Array(N);
     let arcTotal = 1, S = 0, V = 0, D = 0, TX = 1, TY = 0, SEG = 0;
+    let rasterSpecies = PondOccupant.KOI;
     function sample(px, py, L, flareL, flareR, from = 0, to = N - 2) {
       let best = Infinity, bs = 0, sign = 1, past = 0, ahead = 0, lateral = 0;
       for (let n = from; n <= to; n++) {
@@ -434,20 +478,24 @@
         }
       }
       D = Math.sqrt(best); S = bs; V = D * sign;
-      return classify(bs, D / L, past / L, sign > 0 ? flareL : flareR, ahead / L, lateral / L);
+      return rasterSpecies === PondOccupant.ARAPAIMA
+        ? classifyArapaima(bs, D / L, past / L, sign > 0 ? flareL : flareR, ahead / L)
+        : classify(bs, D / L, past / L, sign > 0 ? flareL : flareR, ahead / L, lateral / L);
     }
     const lineGlyph = (dx, dy) => { const d = Math.hypot(dx, dy) || 1; return Math.abs(dy) < 0.38 * d ? "-" : Math.abs(dx) < 0.38 * d ? "|" : dx * dy > 0 ? "\\" : "/"; };
 
     function rasterize(f, dimAt) {
-      const k = K, hx = headX(f), hy = headY(f), L = f.L0 * k;
+      rasterSpecies = f.species || PondOccupant.KOI;
+      const perspective = rasterSpecies === PondOccupant.ARAPAIMA ? 0.88 + 0.12 * f.rise : 1;
+      const k = K, hx = headX(f), hy = headY(f), L = f.L0 * k * perspective;
       const swim = 0.25 + 0.9 * f.beat;
       for (let n = 0; n < N; n++) {
         const s = n / (N - 1), a = Math.max(0, n - 1), b = Math.min(N - 1, n + 1);
         let tx = f.nodes[a * 2] - f.nodes[b * 2], ty = f.nodes[a * 2 + 1] - f.nodes[b * 2 + 1];
         const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
         const off = L * 0.045 * (0.05 + 0.95 * Math.pow(s, 2.2)) * swim * Math.sin(f.phase - s * 4.6);
-        spine[n * 2] = hx + f.nodes[n * 2] * k - ty * off;
-        spine[n * 2 + 1] = hy + f.nodes[n * 2 + 1] * k + tx * off;
+        spine[n * 2] = hx + f.nodes[n * 2] * k * perspective - ty * off;
+        spine[n * 2 + 1] = hy + f.nodes[n * 2 + 1] * k * perspective + tx * off;
       }
       arc[0] = 0;
       for (let n = 1; n < N; n++) arc[n] = arc[n - 1] + Math.hypot(spine[n * 2] - spine[n * 2 - 2], spine[n * 2 + 1] - spine[n * 2 - 1]);
@@ -463,7 +511,8 @@
       const diag = Math.hypot(cw, ch);
       /* A koi rising for food comes up toward the surface: brighter, its shadow further below it. */
       const depth = lerp(f.depth, 1, f.rise * 0.85);
-      const Kc = P.koi[f.colour], alphaBase = (P.dark ? 0.82 : 0.9) * (0.55 + 0.45 * depth) * f.seen;
+      const depthAlpha = rasterSpecies === PondOccupant.ARAPAIMA ? 0.05 + 0.95 * Math.pow(f.rise, 1.65) : 1;
+      const Kc = P.koi[f.colour], alphaBase = (P.dark ? 0.82 : 0.9) * (0.55 + 0.45 * depth) * f.seen * depthAlpha;
       const sdc = 1 + Math.round(depth * 2), sdr = 1 + Math.round(depth);
       const lx = -0.6, ly = -0.8;
       for (let r = r0; r <= r1; r++) {
@@ -474,7 +523,8 @@
           let kind = hit.kind, across = hit.across, rs = hit.rs, ra = hit.ra, s = S, v = V, tx = TX, ty = TY;
           const from = Math.max(0, SEG - 2), to = Math.min(N - 2, SEG + 2);
           let hits = got ? 1 : 0;
-          const deep = got && kind === 1 && s > 0.05 && s < 0.7 && halfW(s) * L - D > diag * 0.4;
+          const profileW = rasterSpecies === PondOccupant.ARAPAIMA ? arapaimaHalfW(s) : halfW(s);
+          const deep = got && kind === 1 && s > 0.05 && s < 0.7 && profileW * L - D > diag * 0.4;
           if (deep) hits = 5;
           for (let q = 0; !deep && q < SUB.length; q += 2) {
             if (!sample(x + SUB[q] * cw, y + SUB[q + 1] * ch, L, flareL, flareR, from, to)) continue;
@@ -512,7 +562,7 @@
             }
             if (cover >= 0.6) {
               const si = (r + sdr) * cols + (c + sdc);
-              if (r + sdr < rows && c + sdc < cols) shade[si] = Math.max(shade[si], (P.dark ? 0.55 : 0.32) * (0.5 + 0.5 * depth) * dim * f.seen);
+              if (r + sdr < rows && c + sdc < cols) shade[si] = Math.max(shade[si], (P.dark ? 0.55 : 0.32) * (0.5 + 0.5 * depth) * dim * f.seen * depthAlpha);
             }
           }
           if (!tileA[i] && !glyphA[i]) touched.push(i);
@@ -526,7 +576,12 @@
     const water = (x, y) => !paused && !reduce && x >= 0 && x <= vw && y >= 0 && y <= vh;
     /* A paw at (x, y): straight in from the nearer edge, top or bottom. */
     function poke(x, y) {
-      if (paws.length >= 3 || !water(x, y)) return false;
+      if (!water(x, y)) return false;
+      /* A tap is enough to warn a giant anywhere in the pond; do this now,
+         rather than waiting for the paw's delayed and proximity-limited dip. */
+      for (const f of arapaimas) f.startledUntil = Math.max(f.startledUntil, t + 7);
+      /* The tap was handled even if the visual paw queue is already full. */
+      if (paws.length >= 3) return true;
       const k = K, fromTop = y <= vh - y;
       const ex = x, ey = fromTop ? -46 * k : vh + 46 * k;
       /* which way it sways and shakes is left to chance */
@@ -563,6 +618,10 @@
         /* the two curious ones come to look from either side, not at the same spot */
         if (i < 2) { const o = (i ? 1 : -1) * 34 * p.k; f.seekX = x - s.vx * o; f.seekY = y - s.vy * o; f.seekFrom = t + 1.3 + i * 0.5; f.seekUntil = f.seekFrom + 3.5; }
       });
+      for (const f of arapaimas) {
+        const d = Math.hypot(f.nx * vw - x, f.ny * vh - y);
+        if (d < reach * 1.15) f.startledUntil = Math.max(f.startledUntil, t + 5 + (1 - d / (reach * 1.15)) * 4);
+      }
       /* Surface petals skate away from the paw; sunken ones only sway a little. */
       for (const b of cherryBlossoms) {
         const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy) || 1;
@@ -819,6 +878,107 @@
         land: t - age, soak: 15 + h2(seed, 10) * 17, sinking: false, depth: 0
       });
     }
+
+    /* Arapaima are rare, deep-water presences rather than oversized koi. They
+       spend most of a long cycle as a faint shadow, rise to breathe, then dive. */
+    function makeArapaimas() {
+      arapaimas.length = 0;
+      if (!occupants.has(PondOccupant.ARAPAIMA)) return;
+      /* Keep a pair even after mixed-pond auto balancing; explicit volume can
+         add more, but never collapses this large occupant back to a singleton. */
+      const amount = Math.max(2, Math.round(2 * volumeFor(PondOccupant.ARAPAIMA)));
+      for (let i = 0; i < amount; i++) {
+        const seed = 1709 + i * 313, sizing = sizingFor(PondOccupant.ARAPAIMA, seed), right = i % 2 === 0;
+        arapaimas.push({
+          species: PondOccupant.ARAPAIMA, colour: "arapaima", variety: "arapaima", marks: { red: [], black: [] }, seen: 1,
+          seed, scaleLevel: sizing.level, size: sizing.size, physicalSize: sizing.physicalSize, L0: sizing.physicalSize,
+          nx: right ? 0.72 : 0.28, ny: 0.66 + 0.14 * (amount === 1 ? 0.5 : i / (amount - 1)) + (h2(seed, 2) - 0.5) * 0.025,
+          a: right ? 0.08 : Math.PI - 0.08, rise: 0.08, depth: 0.08, cycle: -1, startledUntil: 0,
+          beat: 0.2, turn: 0, phase: h2(seed, 4) * 6.28, cycleOffset: i / amount,
+          seg: sizing.physicalSize / (N - 1), nodes: new Float32Array(N * 2)
+        });
+        const f = arapaimas[arapaimas.length - 1];
+        for (let j = 0; j < N; j++) { f.nodes[j * 2] = -Math.cos(f.a) * f.seg * j; f.nodes[j * 2 + 1] = -Math.sin(f.a) * f.seg * j; }
+      }
+    }
+
+    function rescaleSpines(list, kind) {
+      for (const f of list) {
+        const sizing = sizingFor(kind, f.seed), ratio = sizing.physicalSize / f.L0;
+        f.scaleLevel = sizing.level; f.size = sizing.size; f.physicalSize = sizing.physicalSize;
+        f.L0 = sizing.physicalSize; f.seg *= ratio;
+        for (let j = 0; j < f.nodes.length; j++) f.nodes[j] *= ratio;
+      }
+    }
+
+    function rescaleSurfaceOccupants() {
+      for (const b of cherryBlossoms) {
+        const sizing = sizingFor(PondOccupant.CHERRY_BLOSSOM, b.seed);
+        b.scaleLevel = sizing.level; b.size = sizing.size; b.physicalSize = sizing.physicalSize;
+      }
+      for (const leaf of leaves) {
+        const sizing = sizingFor(PondOccupant.LEAF, leaf.seed);
+        leaf.scaleLevel = sizing.level; leaf.size = sizing.size; leaf.physicalSize = sizing.physicalSize;
+      }
+    }
+
+    /* Adding or removing a giant changes every renderer's physical mapping.
+       Recompose existing instances without discarding their behavioral state. */
+    function recomposeForArapaima() {
+      rescaleSpines(fish, PondOccupant.KOI);
+      makeArapaimas();
+      rescaleSurfaceOccupants();
+      settleKoiVisibility();
+    }
+
+    function stepArapaimas(dt) {
+      if (!occupants.has(PondOccupant.ARAPAIMA)) return;
+      const period = clamp(56 / volumeFor(PondOccupant.ARAPAIMA), 30, 90);
+      for (const f of arapaimas) {
+        const clock = t + 22 + f.seed * 0.003 + period * f.cycleOffset, local = clock % period, cycle = Math.floor(clock / period);
+        let rise = local < period * 0.68 ? 0.06
+          : local < period * 0.78 ? lerp(0.06, 1, sstep(period * 0.68, period * 0.78, local))
+          : local < period * 0.83 ? 1
+          : local < period * 0.93 ? lerp(1, 0.06, sstep(period * 0.83, period * 0.93, local))
+          : 0.06;
+        const diving = t < f.startledUntil;
+        if (diving) rise *= 0.12;
+        /* A tap changes intent immediately, but the body takes time to sink:
+           slower easing on the way down, quicker recovery on a natural rise. */
+        const response = diving && rise < f.rise ? 0.85 : 1.8;
+        f.rise = lerp(f.rise, rise, Math.min(1, dt * response));
+        const speed = (7 + 5 * f.rise) * dt / Math.max(1, vw);
+        f.nx += Math.cos(f.a) * speed;
+        f.ny += Math.sin(f.a) * speed + Math.sin(t * 0.09 + f.seed) * dt * 0.0007;
+        if (f.nx < -0.2) { f.nx = 1.2; f.a = Math.PI - 0.08; }
+        if (f.nx > 1.2) { f.nx = -0.2; f.a = 0.08; }
+        if (f.ny < 0.24) { f.ny = 0.24; f.a = Math.abs(f.a); }
+        else if (f.ny > 0.82) { f.ny = 0.82; f.a = -Math.abs(f.a); }
+        const nd = f.nodes;
+        nd[0] = 0; nd[1] = 0;
+        let bx = -Math.cos(f.a), by = -Math.sin(f.a);
+        for (let j = 1; j < N; j++) {
+          const px = nd[(j - 1) * 2], py = nd[(j - 1) * 2 + 1];
+          let vx = nd[j * 2] - px, vy = nd[j * 2 + 1] - py, d = Math.hypot(vx, vy) || 1; vx /= d; vy /= d;
+          const bend = Math.atan2(bx * vy - by * vx, bx * vx + by * vy), limit = BEND * 0.38;
+          if (Math.abs(bend) > limit) { const r = Math.sign(bend) * limit, c = Math.cos(r), s = Math.sin(r); vx = bx * c - by * s; vy = bx * s + by * c; }
+          nd[j * 2] = px + vx * f.seg; nd[j * 2 + 1] = py + vy * f.seg; bx = vx; by = vy;
+        }
+        f.phase += dt * 1.25;
+        if (f.rise > 0.2) {
+          const tx = f.nx * vw + nd[(N - 1) * 2] * K, ty = f.ny * vh + nd[(N - 1) * 2 + 1] * K;
+          stamp(tx, ty, 2, dt * (0.25 + f.rise * 0.55));
+        }
+        const gulpAt = period * 0.805;
+        if (cycle !== f.cycle && local >= gulpAt && local < gulpAt + 0.12 && f.rise > 0.82 && t >= f.startledUntil) {
+          f.cycle = cycle;
+          const x = headX(f), y = headY(f);
+          rings.push({ x, y, born: t, k: K * 1.7 });
+          stamp(x, y, 4, 1);
+          for (let j = 0; j < 5; j++) bubbles.push({ x: x + (h2(f.seed, j) - 0.5) * 30, y: y + (h2(f.seed, j + 8) - 0.5) * 18, born: t + j * 0.08 });
+        }
+      }
+    }
     function stepCherryBlossoms(dt) {
       if (!occupants.has(PondOccupant.CHERRY_BLOSSOM)) return;
       if (t >= nextCherryBlossom) {
@@ -956,6 +1116,7 @@
     function advance(dt) {
       t += dt;
       step(dt);
+      stepArapaimas(dt);
       stepPaws(dt);
       stepFood(dt);
       stepCherryBlossoms(dt);
@@ -982,7 +1143,11 @@
         leafDark: dark ? [46, 102, 72] : [45, 98, 62],
         leaf: dark ? [91, 153, 105] : [83, 139, 86],
         leafPale: dark ? [165, 194, 126] : [142, 169, 91],
-        leafVein: dark ? [203, 219, 158] : [47, 91, 52]
+        leafVein: dark ? [203, 219, 158] : [47, 91, 52],
+        arapaimaDeep: dark ? [30, 47, 48] : [92, 96, 88],
+        arapaimaArmor: dark ? [132, 151, 139] : [72, 78, 69],
+        arapaimaLight: dark ? [198, 204, 177] : [112, 115, 94],
+        arapaimaRed: dark ? [218, 61, 47] : [176, 42, 32]
       };
       const scheme = (red, white, black) => {
         /* Pale skin needs a real value step from light water; otherwise only
@@ -994,7 +1159,8 @@
         course: scheme(P.red, P.white, P.black),
         vermilion: scheme([214, 58, 36], [246, 242, 234], [24, 22, 20]),
         gold: scheme([230, 164, 52], [222, 228, 232], [98, 74, 42]),
-        sakura: scheme([238, 132, 128], [250, 240, 228], [66, 60, 70])
+        sakura: scheme([238, 132, 128], [250, 240, 228], [66, 60, 70]),
+        arapaima: scheme(P.arapaimaRed, P.arapaimaArmor, P.arapaimaDeep)
       };
     }
 
@@ -1008,7 +1174,8 @@
         const d = Math.hypot(Math.max(box.left - x, 0, x - box.right), Math.max(box.top - y, 0, y - box.bottom));
         return 0.1 + 0.9 * sstep(0, pad, d);
       } : () => 1;
-      const order = fish.filter(f => f.seen > 0).sort((a, b) => a.depth - b.depth);
+      const effectiveDepth = f => lerp(f.depth, 1, f.rise * 0.85);
+      const order = [...arapaimas, ...fish.filter(f => f.seen > 0)].sort((a, b) => effectiveDepth(a) - effectiveDepth(b));
       for (const f of order) rasterize(f, dimAt);
       rasterDrops();
 
@@ -1072,6 +1239,7 @@
     /* From scratch: the shoal, then a few seconds of swimming so it starts in natural curves. */
     function reset() {
       makeFish();
+      makeArapaimas();
       paws.length = rings.length = drops.length = food.length = bubbles.length = cherryBlossoms.length = leaves.length = 0;
       cherryBlossomSerial = 0; nextCherryBlossom = 1.2; leafSerial = 0; nextLeaf = 1.6;
       wake.fill(0); wakeTmp.fill(0);
@@ -1144,6 +1312,7 @@
       get time() { return t; },
       /* for tests: the koi and the food */
       get fish() { return fish; },
+      get arapaimas() { return arapaimas; },
       get food() { return food; },
       get cherryBlossoms() { return cherryBlossoms; },
       get leaves() { return leaves; },
@@ -1152,16 +1321,39 @@
       get volumes() { return Object.fromEntries([...occupants].map(kind => [kind, volumeFor(kind)])); },
       setOccupants(list) {
         const next = Array.isArray(list) ? list : [list];
+        const previous = new Set(occupants);
         occupants.clear();
         for (const kind of next) if (Object.values(PondOccupant).includes(kind)) occupants.add(kind);
-        /* Before size(), typed buffers do not exist yet; start() will reset. */
-        if (wake) reset(); else makeFish();
+
+        if (occupants.has(PondOccupant.KOI)) {
+          if (previous.has(PondOccupant.KOI)) rescaleSpines(fish, PondOccupant.KOI); else makeFish();
+        } else {
+          fish = []; food.length = bubbles.length = 0;
+        }
+
+        if (occupants.has(PondOccupant.ARAPAIMA)) {
+          if (previous.has(PondOccupant.ARAPAIMA)) rescaleSpines(arapaimas, PondOccupant.ARAPAIMA); else makeArapaimas();
+        } else arapaimas.length = 0;
+
+        if (!occupants.has(PondOccupant.CHERRY_BLOSSOM)) cherryBlossoms.length = 0;
+        else if (!previous.has(PondOccupant.CHERRY_BLOSSOM) && wake) {
+          const initial = Math.max(8, Math.round(32 * volumeFor(PondOccupant.CHERRY_BLOSSOM)));
+          for (let j = 0; j < initial; j++) addCherryBlossom(true);
+        }
+        if (!occupants.has(PondOccupant.LEAF)) leaves.length = 0;
+        else if (!previous.has(PondOccupant.LEAF) && wake) {
+          const initial = Math.max(5, Math.round(16 * volumeFor(PondOccupant.LEAF)));
+          for (let j = 0; j < initial; j++) addLeaf(true);
+        }
+        rescaleSurfaceOccupants();
+        settleKoiVisibility();
         dirty = true;
         return [...occupants];
       },
       addOccupant(kind) {
         if (!Object.values(PondOccupant).includes(kind) || occupants.has(kind)) return false;
         occupants.add(kind);
+        if (kind === PondOccupant.ARAPAIMA) { recomposeForArapaima(); dirty = true; return true; }
         if (kind === PondOccupant.KOI) {
           makeFish();
         }
@@ -1178,6 +1370,7 @@
       },
       removeOccupant(kind) {
         if (!occupants.delete(kind)) return false;
+        if (kind === PondOccupant.ARAPAIMA) { recomposeForArapaima(); dirty = true; return true; }
         if (kind === PondOccupant.KOI) {
           fish = [];
           food.length = bubbles.length = 0;
