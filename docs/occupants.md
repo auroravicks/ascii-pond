@@ -19,7 +19,7 @@ Use `addOccupant`, `removeOccupant` and `setOccupants` to change the list at run
 | Cat paw / tap | Flee, then return or investigate | Animate a dive and remain deep briefly | Scatter across the surface | Scatter across the surface |
 | Food / hold or right-click | Seek and eat pellets | No response | No response | No response |
 
-Arapaima otherwise follow their own staggered breathing cycle: the pair spends most of its time as faint deep-water shadows, rises briefly, gulps at the surface, and descends again.
+Arapaima otherwise follow their own staggered breathing cycle: the pair spends most of its time as faint deep-water shadows, but each fish rises about once every 46 seconds at normal volume, remains fully surfaced for roughly six seconds, gulps, and descends again.
 
 ## Absolute size and relative scale
 

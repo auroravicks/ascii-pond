@@ -933,13 +933,16 @@
 
     function stepArapaimas(dt) {
       if (!occupants.has(PondOccupant.ARAPAIMA)) return;
-      const period = clamp(56 / volumeFor(PondOccupant.ARAPAIMA), 30, 90);
+      /* Breathe often enough to be noticed, but remain a deep-water presence:
+         at normal volume the pair cycles about every 46 seconds and each fish
+         holds at the surface for roughly six and a half seconds. */
+      const period = clamp(46 / volumeFor(PondOccupant.ARAPAIMA), 26, 75);
       for (const f of arapaimas) {
         const clock = t + 22 + f.seed * 0.003 + period * f.cycleOffset, local = clock % period, cycle = Math.floor(clock / period);
-        let rise = local < period * 0.68 ? 0.06
-          : local < period * 0.78 ? lerp(0.06, 1, sstep(period * 0.68, period * 0.78, local))
-          : local < period * 0.83 ? 1
-          : local < period * 0.93 ? lerp(1, 0.06, sstep(period * 0.83, period * 0.93, local))
+        let rise = local < period * 0.58 ? 0.06
+          : local < period * 0.7 ? lerp(0.06, 1, sstep(period * 0.58, period * 0.7, local))
+          : local < period * 0.84 ? 1
+          : local < period * 0.96 ? lerp(1, 0.06, sstep(period * 0.84, period * 0.96, local))
           : 0.06;
         const diving = t < f.startledUntil;
         if (diving) rise *= 0.12;
@@ -969,7 +972,7 @@
           const tx = f.nx * vw + nd[(N - 1) * 2] * K, ty = f.ny * vh + nd[(N - 1) * 2 + 1] * K;
           stamp(tx, ty, 2, dt * (0.25 + f.rise * 0.55));
         }
-        const gulpAt = period * 0.805;
+        const gulpAt = period * 0.77;
         if (cycle !== f.cycle && local >= gulpAt && local < gulpAt + 0.12 && f.rise > 0.82 && t >= f.startledUntil) {
           f.cycle = cycle;
           const x = headX(f), y = headY(f);
